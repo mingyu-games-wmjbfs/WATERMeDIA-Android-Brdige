@@ -4,7 +4,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-3fb950.svg)](#适用范围)
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.235%2B-e8942a.svg)](#适用范围)
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#适用范围)
-[![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases)
+[![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
 
 [English](README.en.md) · **简体中文**
 
@@ -60,7 +60,7 @@ private final boolean wrapped = Platform.isWindows() && Platform.is64Bit();
 ## 安装与使用
 
 1. 确认 `mods/` 里已有 **WATERMeDIA 2.1.36 或 2.1.37** 的 jar（客户端版本）；
-2. 从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases) 下载
+2. 从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases) 下载
    **`watermedia_android_bridge-1.0.4+mc1.21.1-neoforge.jar`**（还没发布 Release 时，可按下文「从源码构建」自行打包），
    放进同一个 `mods/` 目录；
 3. 启动游戏。**首次启动**会自动把约 43 MiB（每个 ABI）的原生库解包到**应用内部存储**——
@@ -189,7 +189,7 @@ tools\itest.ps1
 
 ## 下载与校验
 
-从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases) 下载：
+从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases) 下载：
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|

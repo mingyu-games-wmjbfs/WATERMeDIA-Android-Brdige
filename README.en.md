@@ -4,7 +4,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-3fb950.svg)](#requirements)
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.235%2B-e8942a.svg)](#requirements)
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#requirements)
-[![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases)
+[![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
 
 **English** · [简体中文](README.md)
 
@@ -60,7 +60,7 @@ discovery chain.
 
 1. Make sure your `mods/` folder already contains **WATERMeDIA 2.1.36 or 2.1.37** (client);
 2. Download **`watermedia_android_bridge-1.0.4+mc1.21.1-neoforge.jar`** from
-   [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases)
+   [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
    (if no release is published yet, build it yourself — see “Building from source”) and put it in the same
    `mods/` folder;
 3. Start the game. On the **first launch** it extracts about 43 MiB per ABI of native libraries into
@@ -202,7 +202,7 @@ tools\itest.ps1
 
 ## Download and checksums
 
-From [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases):
+From [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases):
 
 | File | Size | SHA-256 |
 |---|---|---|

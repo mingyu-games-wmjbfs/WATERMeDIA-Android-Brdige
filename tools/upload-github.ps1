@@ -28,7 +28,7 @@ tools/**.  docs/DEVELOPMENT-LOG.md, vendor/, build/, dist/ and logs/ stay local.
 param(
   [string]$Token = $env:GITHUB_TOKEN,
   [string]$Owner = 'mingyu-games-wmjbfs',
-  [string]$Repo = 'WATERMeDIA-Android-Brdige',
+  [string]$Repo = 'WATERMeDIA-Android-Bridge',
   [string]$Branch = '',
   [string]$Message = 'WATERMeDIA: Android Bridge 1.0.4 - source, docs and licence',
   [string]$ReleaseTag = '',
