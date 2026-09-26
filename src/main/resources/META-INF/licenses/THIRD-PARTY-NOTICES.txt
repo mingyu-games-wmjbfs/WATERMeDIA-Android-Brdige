@@ -1,0 +1,69 @@
+WATERMeDIA: Android Bridge - third party notices
+===============================================
+
+This mod is licensed under the GNU General Public License, version 3 or later
+(see GPL-3.0.txt).  It bundles unmodified third party binaries, which is what
+determines that licence choice.  The full licence texts are shipped next to this
+file.
+
+1. VLC for Android - the bundled libvlc.so
+------------------------------------------
+Files:
+    watermedia_android/natives/<abi>/libvlc.so
+    watermedia_android/natives/<abi>/libc++_shared.so
+
+Taken unmodified from the official VLC for Android release
+    VLC-Android-3.7.1-<abi>.apk
+    https://get.videolan.org/vlc-android/3.7.1/
+
+Copyright (C) the VideoLAN VLC media player developers.
+
+The VLC engine (LibVLC) is licensed under the GNU Lesser General Public
+License, version 2.1 or later (LGPL-2.1.txt).  The VLC for Android application,
+and therefore the monolithic libvlc.so shipped in its APK, statically links
+additional modules and Android libraries; upstream describes the result as
+follows:
+
+    "VLC for Android is licensed under GPLv2 (or later).  Android libraries
+     make this, de facto, a GPLv3 application."
+        -- vlc-android README, License section
+
+Because the LGPL / GPLv2+ components are combined into a single binary, this mod
+distributes that binary - and hence the combined jar - under the GNU General
+Public License version 3 or later (GPL-3.0.txt, which is compatible with
+GPL-2.0.txt).
+
+License texts: GPL-3.0.txt, GPL-2.0.txt, LGPL-2.1.txt
+Corresponding source code:
+    https://code.videolan.org/videolan/vlc
+    https://code.videolan.org/videolan/vlc-android
+    https://code.videolan.org/videolan/libvlcjni
+
+libc++_shared.so is the LLVM libc++ runtime, licensed under the Apache License
+2.0 with the LLVM exception (Apache-2.0.txt, LLVM-exception.txt).
+    https://llvm.org/LICENSE.txt
+
+2. WATERMeDIA
+-------------
+This mod contains no WATERMeDIA code; it depends on the WATERMeDIA jar at
+runtime only.  Note that WATERMeDIA itself is distributed under the PolyForm
+Strict License 1.0.0, which is not an open source license; this mod neither
+bundles nor redistributes it.
+    https://github.com/WaterMediaTeam/watermedia
+
+The optional Mixin in this mod (org.watermedia.androidbridge.mixin.RenderAPIMixin)
+redirects a single native allocation call inside WATERMeDIA's RenderAPI, so that
+a failing LWJGL aligned allocation falls back to WATERMeDIA's own direct-buffer
+path instead of aborting the game during mod loading.  It is declared
+"required": false, contains no WATERMeDIA code, and can be removed on its own.
+
+3. Not bundled, but optionally supported
+----------------------------------------
+If an Android JNA dispatch library (libjnidispatch.so) is placed into the payload
+directory, the bridge can point JNA at it when a launcher does not provide one
+itself.  Builds published by this project do not ship that file - the launchers
+that need it (for example FCL or PojavLauncher) already provide a matching build,
+and the bundled copy would be a third party binary that never activates.
+Anyone re-adding it must also ship its licence, which for the PojavLauncher build
+is the GNU Lesser General Public License version 3.
+    https://github.com/PojavLauncherTeam/PojavLauncher

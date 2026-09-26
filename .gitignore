@@ -1,0 +1,29 @@
+# 构建产物与本地工具链（可由 tools/ 下的脚本重新生成）
+build/
+dist/
+
+# 下载的第三方原料：WATERMeDIA 的 jar/源码、VLC 安卓 APK、许可全文、JNA 原生库
+# 其中 watermedia_binaries-*.jar 有 137 MB，超过 GitHub 单文件 100 MB 上限，
+# 绝对不能提交。需要时运行 tools/download-*.ps1 重新获取。
+vendor/
+
+# 由 tools/pack-payload.ps1 从官方 VLC 安卓 APK 生成（约 127 MiB 的 .so）：
+# 仓库只保留生成脚本与清单，二进制不进版本库。
+src/main/resources/watermedia_android/natives/
+src/main/resources/watermedia_android/jna/
+
+# 运行期/测试产物
+logs/
+*.log
+hs_err_pid*.log
+crash-*.txt
+
+# 内部开发记录：按作者要求不公开
+docs/DEVELOPMENT-LOG.md
+
+# 编辑器/系统
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
