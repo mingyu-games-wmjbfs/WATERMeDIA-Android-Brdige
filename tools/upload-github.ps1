@@ -44,7 +44,7 @@ function Get-UploadFiles {
   # built with += instead of List.AddRange: Windows PowerShell 5.1 does not convert
   # the Object[] that ForEach-Object produces into IEnumerable[string].
   $files = @()
-  foreach ($relative in @('.gitignore', 'LICENSE', 'README.md', 'docs/TECHNICAL.md', 'docs/RELEASE-NOTES.md')) {
+  foreach ($relative in @('.gitignore', 'LICENSE', 'README.md', 'README.en.md', 'docs/TECHNICAL.md', 'docs/RELEASE-NOTES.md')) {
     $full = Join-Path $root $relative
     if (Test-Path $full) { $files += $full } else { Write-Host "[warn] missing $relative" }
   }
@@ -196,11 +196,19 @@ if ($ReleaseTag) {
       '-H', 'Content-Type: application/octet-stream',
       '-H', 'User-Agent: watermedia-android-bridge-uploader',
       '--data-binary', "@$($asset.FullName)",
-      "https://uploads.github.com/repos/$Owner/$Repo/releases/$($release.id)/assets?name=$($asset.Name)"
+      # the asset name goes into the query string: '+' must be percent-encoded or
+      # GitHub stores the file as "...-1.0.4.mc1.21.1-neoforge.jar"
+      "https://uploads.github.com/repos/$Owner/$Repo/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($asset.Name))"
     )
     $result = (& curl.exe @arguments) -join ''
-    if ($result -match '"browser_download_url"') { Write-Host "  asset: $($asset.Name)" }
-    else { Write-Host "  [warn] asset upload failed for $($asset.Name): $result" }
+    $uploaded = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
+    if ($uploaded -and $uploaded.name -eq $asset.Name) {
+      Write-Host ("  asset: {0} ({1:N1} MiB)" -f $uploaded.name, ($uploaded.size / 1MB))
+    } elseif ($uploaded -and $uploaded.name) {
+      Write-Host "  [warn] asset stored as '$($uploaded.name)', expected '$($asset.Name)'"
+    } else {
+      Write-Host "  [warn] asset upload failed for $($asset.Name): $result"
+    }
   }
 }
 

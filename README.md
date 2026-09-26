@@ -6,6 +6,8 @@
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#适用范围)
 [![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Brdige/releases)
 
+[English](README.en.md) · **简体中文**
+
 给 **WATERMeDIA**（以及基于它的 **WATERFrAMES** 等模组）补上 Android 端缺失的 VLC，
 让视频屏幕、方块音乐在 PojavLauncher / FCL 等安卓 Java 版启动器上真正能播。
 
