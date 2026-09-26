@@ -15,7 +15,7 @@ Usage
     pwsh tools\upload-github.ps1
 
     # upload and publish the built jars as a release
-    pwsh tools\upload-github.ps1 -ReleaseTag v1.0.4 -ReleaseName 'WATERMeDIA: Android Bridge 1.0.4'
+    pwsh tools\upload-github.ps1 -ReleaseTag v1.0.5 -ReleaseName 'WATERMeDIA: Android Bridge 1.0.5' -Version 1.0.5
 
 Token: a fine-grained personal access token with "Contents: Read and write" on this
 repository is enough.  Revoke it right after the upload.
@@ -30,10 +30,12 @@ param(
   [string]$Owner = 'mingyu-games-wmjbfs',
   [string]$Repo = 'WATERMeDIA-Android-Bridge',
   [string]$Branch = '',
-  [string]$Message = 'WATERMeDIA: Android Bridge 1.0.4 - source, docs and licence',
+  [string]$Message = '1.0.5 - fix the blank/white video screen (GLES pixel type, vmem vout, MediaCodec) and add video diagnostics',
   [string]$ReleaseTag = '',
-  [string]$ReleaseName = 'WATERMeDIA: Android Bridge 1.0.4',
+  [string]$ReleaseName = 'WATERMeDIA: Android Bridge 1.0.5',
   [string]$ReleaseBody = '',
+  [string]$Version = '',
+  [string[]]$Topics = @(),
   [switch]$DryRun
 )
 
@@ -190,9 +192,12 @@ if ($ReleaseTag) {
   }
   Write-Host "release: $($release.html_url)"
   # only the playable jar is published: the source already lives in the repository,
-  # so a -sources.jar attachment would be redundant.
-  $assets = @(Get-ChildItem (Join-Path $root 'dist') -Filter '*.jar' -ErrorAction SilentlyContinue |
+  # so a -sources.jar attachment would be redundant.  -Version keeps older builds that
+  # still sit in dist/ from being attached to this release.
+  $pattern = if ($Version) { "*$Version*.jar" } else { '*.jar' }
+  $assets = @(Get-ChildItem (Join-Path $root 'dist') -Filter $pattern -ErrorAction SilentlyContinue |
       Where-Object { $_.Name -notlike '*-sources.jar' })
+  if ($assets.Count -eq 0) { Write-Host "[warn] no release asset matched $pattern in dist/" }
   foreach ($asset in $assets) {
     $arguments = @(
       '-sS', '--ssl-no-revoke', '-X', 'POST', '-m', '1800',
@@ -218,4 +223,17 @@ if ($ReleaseTag) {
 }
 
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+
+if ($Topics.Count -gt 0) {
+  # Topics need the "Administration: write" repository permission; with a
+  # Contents-only token this call is the one that fails, and everything else is
+  # already pushed, so a failure here is reported but not fatal.
+  try {
+    $topicsResult = Invoke-GitHubApi -Method PUT -Path "/repos/$Owner/$Repo/topics" -Body @{ names = @($Topics) }
+    Write-Host ("topics: " + ($topicsResult.names -join ', '))
+  } catch {
+    Write-Host "[warn] could not set topics (needs Administration: write): $($_.Exception.Message)"
+  }
+}
+
 Write-Host 'done'

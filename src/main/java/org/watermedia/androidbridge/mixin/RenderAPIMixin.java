@@ -5,12 +5,16 @@ import java.nio.ByteBuffer;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.watermedia.androidbridge.BridgeLog;
+import org.watermedia.androidbridge.VideoUpload;
 import org.watermedia.api.render.RenderAPI;
 
 /**
- * Makes WATERMeDIA's image buffers survive a failing aligned native allocation.
+ * Makes WATERMeDIA's image buffers survive a failing aligned native allocation and
+ * replaces the video frame upload with an OpenGL ES compatible one.
  *
  * <p>WATERMeDIA allocates every decoded image frame through
  * {@code RenderAPI.createByteBuffer}, which prefers LWJGL's
@@ -68,5 +72,28 @@ public abstract class RenderAPIMixin {
                 throw alignedFailure;
             }
         }
+    }
+
+    /**
+     * Routes every video frame upload through {@link VideoUpload}.
+     *
+     * <p>WATERMeDIA asks for the desktop only pixel type {@code GL_UNSIGNED_INT_8_8_8_8_REV}
+     * (0x8367), which OpenGL ES rejects with {@code GL_INVALID_ENUM}; the texture then keeps
+     * no storage, Minecraft samples an incomplete texture and the video screen stays a flat
+     * white quad while the audio plays on.  See {@link VideoUpload} for the details of the
+     * replacement, which is byte for byte equivalent and also keeps WATERMeDIA's frame
+     * semaphore balanced when anything fails.</p>
+     */
+    @Inject(
+            method = "uploadBuffer(Ljava/nio/ByteBuffer;IIIIZ)V",
+            at = @At(value = "HEAD"),
+            cancellable = true,
+            require = 0,
+            remap = false)
+    private static void bridge$uploadBuffer(final ByteBuffer buffer, final int texture, final int format,
+                                            final int width, final int height, final boolean first,
+                                            final CallbackInfo ci) {
+        VideoUpload.upload(buffer, texture, format, width, height, first);
+        ci.cancel();
     }
 }

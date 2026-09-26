@@ -33,6 +33,15 @@ public final class BridgeConfig {
             # jnaFallback           Allow the bridge to point JNA at its bundled libjnidispatch.so
             #                       when the launcher does not provide one itself.
             # audioOutput           VLC audio output modules, tried in order.
+            # videoOutput           VLC video output module. "vmem" is the callback (vmem)
+            #                       output WATERMeDIA's video screens need; the Android
+            #                       defaults (android_display/android_window) expect a Java
+            #                       Surface that does not exist here and leave a white screen.
+            #                       Empty string = let libvlc decide.
+            # hardwareDecoding      VLC hardware decoder list. The default "none" keeps the
+            #                       Android MediaCodec decoders out of the way, because they
+            #                       want to decode into a Surface. Use "any" to re-enable
+            #                       hardware decoding and save battery on strong devices.
             # extraVlcArguments     Extra libvlc switches, separated by commas or spaces.
             """;
 
@@ -43,6 +52,8 @@ public final class BridgeConfig {
     public boolean overrideFactory = true;
     public boolean jnaFallback = true;
     public String audioOutput = "opensles,audiotrack,any";
+    public String videoOutput = "vmem";
+    public String hardwareDecoding = "none";
     public String extraVlcArguments = "";
 
     private final Path file;
@@ -74,6 +85,8 @@ public final class BridgeConfig {
         config.overrideFactory = config.bool("overrideFactory", config.overrideFactory);
         config.jnaFallback = config.bool("jnaFallback", config.jnaFallback);
         config.audioOutput = config.string("audioOutput", config.audioOutput).trim();
+        config.videoOutput = config.string("videoOutput", config.videoOutput).trim();
+        config.hardwareDecoding = config.string("hardwareDecoding", config.hardwareDecoding).trim();
         config.extraVlcArguments = config.string("extraVlcArguments", config.extraVlcArguments).trim();
         if (created) config.save();
         return config;
@@ -99,6 +112,8 @@ public final class BridgeConfig {
             this.properties.setProperty("overrideFactory", Boolean.toString(this.overrideFactory));
             this.properties.setProperty("jnaFallback", Boolean.toString(this.jnaFallback));
             this.properties.setProperty("audioOutput", this.audioOutput);
+            this.properties.setProperty("videoOutput", this.videoOutput);
+            this.properties.setProperty("hardwareDecoding", this.hardwareDecoding);
             this.properties.setProperty("extraVlcArguments", this.extraVlcArguments);
             try (OutputStream out = Files.newOutputStream(this.file)) {
                 this.properties.store(out, HEADER);
@@ -115,7 +130,20 @@ public final class BridgeConfig {
     /**
      * Builds the libvlc argument vector used for the Android default factories.
      * It mirrors WATERMeDIA's own {@code videolan/arguments_linux.json} (which is
-     * what a non-Windows host gets) and adds the Android specific audio output.
+     * what a non-Windows host gets) and adds the Android specific audio output and
+     * the two video switches Android needs:
+     *
+     * <ul>
+     *   <li>{@code --vout=vmem} - WATERMeDIA's video screens render the frames that
+     *       libvlc hands to a callback, which is the {@code vmem} video output.  The
+     *       Android builds also carry {@code android_display}/{@code android_window},
+     *       which want a Java {@code Surface} that does not exist here; asking for
+     *       {@code vmem} explicitly removes that choice.</li>
+     *   <li>{@code --avcodec-hw=none} - the Android MediaCodec decoders decode into a
+     *       {@code Surface}.  Without one they can open and then never deliver a
+     *       picture, which looks exactly like a frozen video.  Software decoding always
+     *       writes into the callback buffers.</li>
+     * </ul>
      */
     public String[] vlcArguments() {
         final List<String> args = new ArrayList<>();
@@ -131,6 +159,12 @@ public final class BridgeConfig {
         if (!this.audioOutput.isEmpty()) {
             // audiotrack would need the VLC Android Java layer, opensles is pure native.
             args.add("--aout=" + this.audioOutput);
+        }
+        if (!this.videoOutput.isEmpty()) {
+            args.add("--vout=" + this.videoOutput);
+        }
+        if (!this.hardwareDecoding.isEmpty()) {
+            args.add("--avcodec-hw=" + this.hardwareDecoding);
         }
         for (final String extra : this.extraVlcArguments.split("[,\\s]+")) {
             if (!extra.isBlank()) args.add(extra.trim());

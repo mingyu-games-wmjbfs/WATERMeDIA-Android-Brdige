@@ -446,3 +446,86 @@ SPDX 头（`tools/build.ps1` 会在编译前强制校验），并移除 `libjnid
 （需要时 `tools/pack-payload.ps1 -IncludeJna` 可加回，同时必须补其许可声明）。
 
 若要把本模组代码改为 MIT/Apache-2.0，唯一干净做法是**不把 GPL 载荷打进同一个 jar**（分离分发或首次运行获取）。
+
+## 12. 视频链路：为什么是白屏，「卡在第一帧」的两种成因（1.0.5）
+
+设备实测：**音频正常、WATERFrAMES 屏幕是一块纯白**（有黑色屏幕边框，FPS 6）。要定位必须先把
+WATERMeDIA 的取帧路径读到底。
+
+### 12.1 链路
+
+```
+libvlc（解码器 → vout=vmem）
+   └─ format 回调  → VideoPlayer.getBufferFormat(w,h)  → new BufferFormat(Chroma.RGBA,w,h)
+                     → NativeBuffers.allocate()        → Buffers.alloc(pitch*lines)
+                                                       → VideoLan4J.bufferAllocator
+                                                       = RenderAPI::createByteBuffer（本模组已接管）
+   └─ lock/unlock/display 回调（JNA，VLC 自己的 vout 线程）
+        lock()   : semaphore.acquire() → 写 planes 指针 → semaphore.release()
+        unlock() : 空实现
+        display(): renderExecutor.execute( → bindTexture → tryAcquire(1s) → uploadBuffer → release() )
+```
+
+`display` 与 `lock` 靠 `VideoPlayer.semaphore`（1 个许可）互斥：`lock` 等上传结束才把缓冲区交给
+VLC。**注意崩溃点**：`semaphore.release()` 在 `uploadBuffer` 之后，`bindTexture` 之前没有 try/finally——
+所以一旦 `uploadBuffer` 抛异常，许可永久泄漏，下一次 `lock()` 无限阻塞，表现就是**视频永久冻住、
+音频照常**（音频是完全独立的管线）。这条路径必须「绝不抛异常」。
+
+### 12.2 成因 A：OpenGL ES 不接受 `GL_UNSIGNED_INT_8_8_8_8_REV`
+
+`RenderAPI.uploadBuffer`（2.1.36/2.1.37 相同）：
+
+```java
+GL11.glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, format, 0x8367, buffer); // first
+GL11.glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, format, 0x8367, buffer);
+```
+
+`0x8367 = GL_UNSIGNED_INT_8_8_8_8_REV`，是**桌面 GL 专有**的像素类型：GL ES 3.x 的合法
+format/type 组合表里只有 `GL_UNSIGNED_BYTE`、`GL_UNSIGNED_SHORT_5_6_5`、`_4_4_4_4`、`_5_5_5_1`、
+`GL_UNSIGNED_INT_2_10_10_10_REV`、`GL_HALF_FLOAT`、`GL_FLOAT` 等，**没有 8_8_8_8_REV**。安卓上
+Minecraft 跑在 GL ES 之上（FCL 的 GL 翻译层），调用被拒 → 纹理对象始终没有存储 → 采样不完整纹理，
+屏幕就是一片纯白/空白（同时完全不抛 Java 异常，因此日志里"什么都看不到"）。
+
+**等价替换**：对 `format = GL_RGBA`，`GL_UNSIGNED_INT_8_8_8_8_REV` 与 `GL_UNSIGNED_BYTE` 的内存
+字节序**完全相同**（前者是"32 位整数按 R,G,B,A 从最低字节开始"，在小端机上就是 R,G,B,A，与后者
+逐字节一致）。因此换成 `GL_UNSIGNED_BYTE` 画面不变，且桌面/GLES 通吃。
+
+`VideoUpload` 在此基础上加了：unpack 状态归零（VLC 给的是紧密打包缓冲）、尺寸变化时重新
+`glTexImage2D`（否则子图会越界被拒）、`glGetError()` 自检、失败时回退到
+「先 `glTexImage2D(..., null)` 分配空存储再 `glTexSubImage2D`」，并且**所有异常都吞掉**（见 12.1）。
+`RenderAPIMixin` 用 `@Inject(at = HEAD, cancellable = true)` 接管
+`uploadBuffer(Ljava/nio/ByteBuffer;IIIIZ)V`——描述符必须逐字对上，否则 `require = 0` 会静默失效，
+harness 因此专门核对这个字符串。
+
+### 12.3 成因 B：vout / 解码器在安卓上不出帧
+
+同一份 `libvlc.so` 的字符串扫描（`vendor/vlc/raw-arm64/.../libvlc.so`，42.8 MB）：
+
+| 符号 | 次数 | 含义 |
+|---|---|---|
+| `vmem` / `vmem-lock` / `vmem-unlock` / `vmem-display` / `vmem-data` | 13 / 1 / 1 / 1 / 1 | 回调视频所需的 vmem 输出与它的 var 接口**都在**，回调路径可用 |
+| `android_display` / `android_window` | 1 / 1 | 安卓原生 vout 也在包里，它们需要 Java 侧 `Surface`；这里没有 → 必须显式钉住 vmem |
+| `mediacodec` / `mediacodec_ndk` | 11 / 2 | MediaCodec 硬解在包里，且安卓默认会先试它——而它要往 Surface 送帧 |
+| `avcodec` | 284 | 软件解码器在，硬解失败时可回退 |
+| `RV32` | 23 | vmem 需要的 RGBA 色度也在 |
+
+因此新增 `--vout=vmem`（把选择钉死在回调输出，绕开要 Surface 的 android_* ）与
+`--avcodec-hw=none`（避开 MediaCodec 的"打开成功但永远不出图"），两者都可在
+`config/watermedia_android_bridge.properties` 里改回。
+
+### 12.4 让日志自己说话（可诊断性设计）
+
+三种失败形态从外部看起来都是"白屏"，所以 1.0.5 把链路节点写进日志：
+
+| 日志 | 证明的事情 |
+|---|---|
+| `video player #1 created` | `VideoPlayer` 构造成功（`VideoPlayerMixin` 注入 2 参构造的 RETURN，1 参构造会委托给它） |
+| `first video frame from VLC: WxH, N plane(s), chroma …` | 解码器 + vout 都出图了（`display` 回调被调用），问题只可能在 GL 侧 |
+| `video texture upload works: texture T <- WxH (… bytes, …)` | 帧真的进了纹理（此时若屏幕还是白，问题在渲染/屏幕侧） |
+| `… failed for WxH with GL_INVALID_*` / `could not upload a video frame` | 上传被驱动拒绝，错误码 + 已尝试的回退路径在同一条里 |
+| 20 秒无人出帧 → `no video frame from VLC in the N s …` | 由 `VideoDiagnostics.tick()`（挂在客户端 tick 上）判定：libvlc 侧没出帧 |
+
+这些埋点只读计数，不改变播放行为；`VideoDiagnostics` 每个入口都自带 try/catch，`VideoUpload` 更是
+「绝不抛」，避免埋点本身把 12.1 的信号量弄坏。harness 复核了：混入类随包、注入描述符正确、
+mixin 配置列出两个混入、`VideoUpload.class` 里确实是 `GL_UNSIGNED_BYTE` + 两步回退、
+以及**在没有 GL 上下文时调用 `VideoUpload.upload` 不抛异常**（正是信号量保护契约）。

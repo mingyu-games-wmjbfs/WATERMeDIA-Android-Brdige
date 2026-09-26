@@ -531,10 +531,14 @@ public final class AndroidVlc {
     }
 
     private static String[] withVideoDisabled(final String[] args) {
-        final String[] result = new String[args.length + 1];
-        System.arraycopy(args, 0, result, 0, args.length);
-        result[args.length] = "--vout=none";
-        return result;
+        // drop any --vout=... first, so the result does not depend on libvlc letting the
+        // last occurrence of a repeated option win
+        final List<String> result = new ArrayList<>(args.length + 1);
+        for (final String arg : args) {
+            if (!arg.startsWith("--vout=")) result.add(arg);
+        }
+        result.add("--vout=none");
+        return result.toArray(new String[0]);
     }
 
     /**
@@ -542,6 +546,8 @@ public final class AndroidVlc {
      * was constructed after WATERMeDIA already tried (and failed) its discovery.
      */
     public static void clientTick() {
+        // the video watchdog runs for the whole session, not only until the factories are set
+        VideoDiagnostics.tick();
         if (!installed || argsApplied) return;
         if (ticks > TICK_WINDOW) return;
         ticks++;

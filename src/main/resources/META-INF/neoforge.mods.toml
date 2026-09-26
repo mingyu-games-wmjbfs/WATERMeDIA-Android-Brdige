@@ -5,7 +5,7 @@ issueTrackerURL = "https://github.com/WaterMediaTeam/watermedia/issues"
 
 [[mods]]
 modId = "watermedia_android_bridge"
-version = "1.0.4"
+version = "1.0.5"
 displayName = "WATERMeDIA: Android Bridge"
 authors = "WATERMeDIA Android Bridge contributors"
 credits = "VideoLAN team for libVLC, SrRapero720 and Goedix for WATERMeDIA, PojavLauncher team for the Android JNA dispatch library"

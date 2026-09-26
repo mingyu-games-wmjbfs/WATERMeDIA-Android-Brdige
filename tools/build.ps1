@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 $root = 'D:\DSH\WATERMeDIA Android Bridge'
 $mc = 'D:\tools\PCL2\.minecraft'
-$version = '1.0.4'
+$version = '1.0.5'
 $mcVersion = '1.21.1'
 $neoVersion = '21.1.235'
 $modId = 'watermedia_android_bridge'
@@ -51,6 +51,8 @@ $classpath.Add((Join-Path $libs 'net\neoforged\bus\8.0.5\bus-8.0.5.jar'))
 $classpath.Add((Join-Path $libs 'net\neoforged\mergetool\2.0.0\mergetool-2.0.0-api.jar'))
 $classpath.Add((Join-Path $libs 'net\fabricmc\sponge-mixin\0.15.2+mixin.0.8.7\sponge-mixin-0.15.2+mixin.0.8.7.jar'))
 $classpath.Add((Join-Path $libs 'org\lwjgl\lwjgl\3.3.3\lwjgl-3.3.3.jar'))
+# GL11 lives in lwjgl-opengl, not in the lwjgl core jar (VideoUpload needs it)
+$classpath.Add((Join-Path $libs 'org\lwjgl\lwjgl-opengl\3.3.3\lwjgl-opengl-3.3.3.jar'))
 $classpath.Add((Join-Path $libs 'net\java\dev\jna\jna\5.14.0\jna-5.14.0.jar'))
 $classpath.Add((Join-Path $libs 'org\apache\logging\log4j\log4j-api\2.22.1\log4j-api-2.22.1.jar'))
 $classpath.Add((Join-Path $root 'vendor\downloads\watermedia-2.1.36.jar'))

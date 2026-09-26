@@ -50,7 +50,8 @@ New-Item -ItemType Directory -Force -Path $itest | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'harness compilation failed' }
 
 $modClasses = Join-Path $root 'build\classes'
-$modJar = (Get-ChildItem (Join-Path $root 'dist') -Filter '*neoforge.jar' | Select-Object -First 1).FullName
+$modJar = (Get-ChildItem (Join-Path $root 'dist') -Filter '*neoforge.jar' |
+  Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 if (-not $modJar) { throw 'no built mod jar in dist/ - run tools/build.ps1 first' }
 $deps = @(
   $waterMedia,

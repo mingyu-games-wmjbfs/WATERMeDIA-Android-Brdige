@@ -4,7 +4,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-3fb950.svg)](#适用范围)
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.235%2B-e8942a.svg)](#适用范围)
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#适用范围)
-[![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
+[![Version](https://img.shields.io/badge/version-1.0.5-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
 
 [English](README.en.md) · **简体中文**
 
@@ -61,7 +61,7 @@ private final boolean wrapped = Platform.isWindows() && Platform.is64Bit();
 
 1. 确认 `mods/` 里已有 **WATERMeDIA 2.1.36 或 2.1.37** 的 jar（客户端版本）；
 2. 从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases) 下载
-   **`watermedia_android_bridge-1.0.4+mc1.21.1-neoforge.jar`**（还没发布 Release 时，可按下文「从源码构建」自行打包），
+   **`watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar`**（还没发布 Release 时，可按下文「从源码构建」自行打包），
    放进同一个 `mods/` 目录；
 3. 启动游戏。**首次启动**会自动把约 43 MiB（每个 ABI）的原生库解包到**应用内部存储**——
    日志里会打印确切路径；之后启动直接复用（有版本标记，不会重复解包）；
@@ -98,6 +98,8 @@ private final boolean wrapped = Platform.isWindows() && Platform.is64Bit();
 | `overrideFactory` | `true` | 是否重注册默认 VLC 工厂（安卓音频输出依赖它） |
 | `jnaFallback` | `true` | 允许在启动器未提供 JNA 原生库时使用载荷内的同版本库（默认不随包，见许可章节） |
 | `audioOutput` | `opensles,audiotrack,any` | VLC 音频输出模块，按顺序尝试；**无声时可改成 `audiotrack,opensles,any` 或 `any`** |
+| `videoOutput` | `vmem` | VLC 视频输出模块。`vmem` 是 WATERMeDIA 回调视频（屏幕里放视频）必需的输出；安卓自带的 `android_display`/`android_window` 需要一个这里并不存在的 Surface，会导致**白屏**。留空表示交给 libvlc 自己决定 |
+| `hardwareDecoding` | `none` | VLC 硬解模块列表。默认 `none` 是为了避开安卓 MediaCodec——它要往 Surface 送帧，这里没有 Surface，可能"打开成功却永远不出图"。设备性能强、想省电可改回 `any` |
 | `extraVlcArguments` | 空 | 追加的 libvlc 参数，逗号或空格分隔 |
 
 调试用系统属性：`-Dwatermedia.androidbridge.forceAndroid=true`（在非安卓环境强制走安卓流程）、
@@ -118,6 +120,7 @@ WATERMeDIA 在发现失败时还会打印 VLC 自述日志 `logs/videolan-discov
 | 启动时 `SIGSEGV` in `libc.so` (`strtol`)、`Could not find any graphics adapters` | **与本模组无关**：启动器的自定义渲染器插件（例如 `libltw_turbo.so`，报 `undefined symbol`）在 GL 初始化阶段崩溃 | 把启动器渲染器从「自定义/Custom」改回内置渲染器，或更新/移除该渲染器插件 |
 | `bilibili_media` 加载失败 `NoClassDefFoundError: me/shedaniel/autoconfig/ConfigData` | 该第三方模组缺 **Cloth Config** 前置 | 安装 Cloth Config 或移除该模组 |
 | 有画面没声音 | 设备的 `opensles` 不可用 | 把 `audioOutput` 改为 `audiotrack,opensles,any`，或直接用 `any` |
+| 有声音但画面永远是一块白色（视频不动） | 1.0.4 及更早：WATERMeDIA 用桌面专用的 `GL_UNSIGNED_INT_8_8_8_8_REV` 上传视频帧，OpenGL ES 拒绝该类型，纹理始终没有数据 | 1.0.5 起改为通用的 `GL_UNSIGNED_BYTE`（字节序等价）并加兜底路径，同时强制 `--vout=vmem`、默认关掉 MediaCodec 硬解。若仍白屏，日志会指明是 libvlc 没出帧（只有 `video player #N created`）还是渲染侧问题（有 `video texture upload works`） |
 | 首次启动很慢 | 正在解包约 43 MiB 原生库 | 正常，仅首次；之后命中版本标记直接复用 |
 
 ---
@@ -193,7 +196,7 @@ tools\itest.ps1
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `watermedia_android_bridge-1.0.4+mc1.21.1-neoforge.jar` | 59.25 MiB | `49BAC37E59D857B90CD1C368283CF1BAF1A8AF3E184C8C1CFE1B42E2EFCBF85F` |
+| `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` | 59.17 MiB | `A9A0F466CC2D4973537A17F4F82354FF8FEB627C8A301C9A0C646142AEEF7BCB` |
 
 源码就在本仓库中（`src/`、`tools/`），不再另外附带源码包；按「从源码构建」一节即可自行打包。
 

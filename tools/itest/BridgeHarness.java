@@ -155,6 +155,109 @@ public final class BridgeHarness {
             check("mixin wiring could be inspected (" + t + ')', false);
         }
 
+        // ---- video path: the Android GL upload and the frame diagnostics ----------
+        // WATERMeDIA uploads video frames with GL_UNSIGNED_INT_8_8_8_8_REV (0x8367), a
+        // desktop-only pixel type that OpenGL ES rejects; the texture then keeps no
+        // storage and the screen stays white while the audio plays.  The bridge replaces
+        // that call, so the injection has to name the exact descriptor or it silently
+        // does nothing, and the replacement must never throw: WATERMeDIA releases its
+        // frame semaphore only after uploadBuffer returns.
+        try {
+            final byte[] uploadMixin = readFromCodeSource(AndroidVlc.class,
+                    "org/watermedia/androidbridge/mixin/RenderAPIMixin.class");
+            check("the upload mixin is packaged", uploadMixin != null);
+            check("the upload mixin targets uploadBuffer(ByteBuffer,int,int,int,int,boolean)",
+                    containsAscii(uploadMixin, "uploadBuffer(Ljava/nio/ByteBuffer;IIIIZ)V"));
+            check("the upload mixin routes frames through VideoUpload",
+                    containsAscii(uploadMixin, "org/watermedia/androidbridge/VideoUpload")
+                            && containsAscii(uploadMixin, "upload"));
+
+            final byte[] playerMixin = readFromCodeSource(AndroidVlc.class,
+                    "org/watermedia/androidbridge/mixin/VideoPlayerMixin.class");
+            check("the video player mixin is packaged", playerMixin != null);
+            check("the video player mixin targets VideoPlayer.display and its constructor",
+                    containsAscii(playerMixin, "display(Lorg/watermedia/videolan4j/player/base/MediaPlayer;"
+                                    + "[Ljava/nio/ByteBuffer;Lorg/watermedia/videolan4j/player/embedded/"
+                                    + "videosurface/callback/BufferFormat;)V")
+                            && containsAscii(playerMixin, "<init>(Lorg/watermedia/videolan4j/factory/"
+                                    + "MediaPlayerFactory;Ljava/util/concurrent/Executor;)V"));
+            check("the video player mixin reports through VideoDiagnostics",
+                    containsAscii(playerMixin, "org/watermedia/androidbridge/VideoDiagnostics"));
+
+            final byte[] mixinConfigVideo = readFromCodeSource(AndroidVlc.class, "watermedia_android_bridge.mixins.json");
+            check("the mixin config lists both mixins",
+                    containsAscii(mixinConfigVideo, "VideoPlayerMixin")
+                            && containsAscii(mixinConfigVideo, "RenderAPIMixin"));
+
+            final byte[] uploadClass = readFromCodeSource(AndroidVlc.class,
+                    "org/watermedia/androidbridge/VideoUpload.class");
+            check("VideoUpload uses GL_UNSIGNED_BYTE and a two step fallback",
+                    containsAscii(uploadClass, "glTexImage2D")
+                            && containsAscii(uploadClass, "glTexSubImage2D")
+                            && containsAscii(uploadClass, "GL_UNSIGNED_BYTE")
+                            && containsAscii(uploadClass, "glGetError"));
+
+            // the contract that keeps VLC's video output thread alive: no exception may
+            // escape, even when there is no GL context at all (which is the case here)
+            boolean threw = false;
+            try {
+                org.watermedia.androidbridge.VideoUpload.upload(
+                        java.nio.ByteBuffer.allocateDirect(16), 42, 6408, 2, 2, true);
+            } catch (final Throwable t) {
+                threw = true;
+                System.out.println("  (VideoUpload.upload threw: " + t + ')');
+            }
+            check("VideoUpload.upload never throws without a GL context (keeps the frame semaphore balanced)",
+                    !threw);
+            check("the GL error names are decoded for the log",
+                    org.watermedia.androidbridge.VideoDiagnostics.describeGlError(0x0500).contains("GL_INVALID_ENUM")
+                            && org.watermedia.androidbridge.VideoDiagnostics.describeGlError(0x0501).contains("GL_INVALID_VALUE")
+                            && org.watermedia.androidbridge.VideoDiagnostics.describeGlError(0x0505).contains("OUT_OF_MEMORY"));
+            boolean tickThrew = false;
+            try {
+                org.watermedia.androidbridge.VideoDiagnostics.tick();
+            } catch (final Throwable t) {
+                tickThrew = true;
+            }
+            check("the video watchdog tick never throws", !tickThrew);
+        } catch (final Throwable t) {
+            check("the video upload path could be inspected (" + t + ')', false);
+        }
+
+        // ---- Android VLC arguments -------------------------------------------------
+        try {
+            final Path configDir = gameDir.resolve("config").resolve("watermedia_android_bridge-probe");
+            Files.createDirectories(configDir);
+            Files.deleteIfExists(configDir.resolve("watermedia_android_bridge.properties"));
+            final BridgeConfig defaults = BridgeConfig.load(configDir);
+            final String joined = String.join(" ", defaults.vlcArguments());
+            check("the default arguments force the callback (vmem) video output", joined.contains("--vout=vmem"));
+            check("the default arguments keep the Android MediaCodec decoders out of the way",
+                    joined.contains("--avcodec-hw=none"));
+            check("the default arguments still request the OpenSL ES audio output",
+                    joined.contains("--aout=opensles,audiotrack,any"));
+            check("the default arguments keep every switch WATERMeDIA's Linux list uses",
+                    joined.contains("--no-quiet") && joined.contains("--network-synchronisation")
+                            && joined.contains("--network-caching=1000") && joined.contains("--live-caching=1000")
+                            && joined.contains("--file-caching=1000") && joined.contains("--no-file-logging")
+                            && joined.contains("--http-reconnect") && joined.contains("--no-metadata-network-access"));
+
+            Files.writeString(configDir.resolve("watermedia_android_bridge.properties"),
+                    "videoOutput=\nhardwareDecoding=any\nextraVlcArguments=--no-drop-late-frames,--drop-late-frames\n",
+                    StandardCharsets.UTF_8);
+            final BridgeConfig custom = BridgeConfig.load(configDir);
+            final String customJoined = String.join(" ", custom.vlcArguments());
+            check("an empty videoOutput lets libvlc choose the video output",
+                    !customJoined.contains("--vout="));
+            check("hardwareDecoding=any re-enables hardware decoding",
+                    customJoined.contains("--avcodec-hw=any"));
+            check("extra arguments are appended last",
+                    customJoined.endsWith("--no-drop-late-frames --drop-late-frames"));
+            deleteRecursively(configDir);
+        } catch (final Throwable t) {
+            check("the Android VLC argument set could be inspected (" + t + ')', false);
+        }
+
         // Licence compliance: whatever the jar redistributes must come with its full
         // licence text, and the mod's own licence has to be declared.
         try {

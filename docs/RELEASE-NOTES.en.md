@@ -35,7 +35,50 @@ These two lines in `latest.log` mean it worked:
 **WATERFrAMES needs no patch of its own** — as soon as VLC is available, its screens, projectors and block
 music recover automatically.
 
-## Changes in 1.0.4
+## Changes in 1.0.5
+
+Fixes **"audio plays fine but the video picture is stuck on the first frame (a plain white quad)"**.
+Two independent causes are addressed, and every step of the video chain is now logged, so if it still
+misbehaves the log itself says where it stops:
+
+1. **The OpenGL pixel type (most likely culprit)** — WATERMeDIA uploads video frames with
+   `GL_UNSIGNED_INT_8_8_8_8_REV` (0x8367), a **desktop-only** type. OpenGL ES rejects it with
+   `GL_INVALID_ENUM`, so `glTexImage2D` never allocates texture storage, Minecraft samples an
+   incomplete texture and the screen stays a flat white quad while the audio keeps playing. The bridge
+   now takes over `RenderAPI.uploadBuffer` and uses `GL_UNSIGNED_BYTE`, which both desktop GL and GL ES
+   accept: for `GL_RGBA` the memory layout is byte for byte identical, so the picture is unchanged. It
+   adds GL error checking, re-allocation when the frame size changes, and an "allocate empty storage,
+   then `glTexSubImage2D`" fallback. This path **never throws** — WATERMeDIA releases its frame semaphore
+   only after `uploadBuffer` returns, and an exception there would wedge VLC's video output thread
+   forever, which is exactly the "video frozen, audio fine" pattern.
+2. **Video output module and decoder** — two Android-specific switches are added: `--vout=vmem` (force
+   the callback (vmem) video output WATERMeDIA's video screens need, instead of the
+   `android_display`/`android_window` paths that expect a Java `Surface`) and `--avcodec-hw=none` (the
+   Android MediaCodec decoders want to decode into a `Surface`; without one they can open successfully
+   and then never deliver a picture). Both can be changed in
+   `config/watermedia_android_bridge.properties` (`videoOutput` / `hardwareDecoding`, e.g.
+   `hardwareDecoding=any` to go back to hardware decoding and save battery).
+3. **Diagnosability** — the log now records the video chain: `video player #1 created` →
+   `first video frame from VLC: WxH` → `video texture upload works`, plus GL error details and a 30
+   second heartbeat. When no frame arrives within 20 seconds of a player being created, the bridge says
+   so explicitly ("libvlc delivered no picture").
+
+**Unchanged in this release**: the bundled VLC is the same official VLC for Android 3.7.1 (libvlc
+3.0.23) and the payload version `vlc3.0.23-android3.7.1-r2` is unchanged, so upgrading does not
+re-extract anything (instant start). Licensing and dependency declarations are unchanged
+(`GPL-3.0-or-later`; WATERMeDIA stays a required dependency and is not bundled).
+
+### If the picture is still white, this is what to send
+
+Just the `latest.log` — it names the failing step directly:
+
+| What the log shows | Meaning |
+|---|---|
+| `video player #N created` but no `first video frame from VLC` | libvlc (video output/decoder) produced nothing; OpenGL is not the problem |
+| both lines and `video texture upload works`, screen still white | frames and upload are fine; the problem is on the renderer/screen side |
+| `GL error` / `could not upload a video frame` | the driver refused the upload; the error code and every fallback tried are in the same line |
+
+## Older version (1.0.4)
 
 * Licence compliance: confirmed `GPL-3.0-or-later`, all licence texts are shipped inside the jar under
   `META-INF/licenses/`, every source file carries an SPDX header, and the repository root has a `LICENSE`;

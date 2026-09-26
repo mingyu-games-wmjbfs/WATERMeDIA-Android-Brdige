@@ -4,7 +4,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-3fb950.svg)](#requirements)
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.235%2B-e8942a.svg)](#requirements)
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#requirements)
-[![Version](https://img.shields.io/badge/version-1.0.4-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
+[![Version](https://img.shields.io/badge/version-1.0.5-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
 
 **English** · [简体中文](README.md)
 
@@ -59,7 +59,7 @@ discovery chain.
 ## Installation and usage
 
 1. Make sure your `mods/` folder already contains **WATERMeDIA 2.1.36 or 2.1.37** (client);
-2. Download **`watermedia_android_bridge-1.0.4+mc1.21.1-neoforge.jar`** from
+2. Download **`watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar`** from
    [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
    (if no release is published yet, build it yourself — see “Building from source”) and put it in the same
    `mods/` folder;
@@ -100,6 +100,8 @@ The first launch writes `config/watermedia_android_bridge.properties`:
 | `overrideFactory` | `true` | Re-register the default VLC factories (Android audio output depends on it) |
 | `jnaFallback` | `true` | Allow using a JNA native library from the payload when the launcher provides none (none is bundled by default — see the licence section) |
 | `audioOutput` | `opensles,audiotrack,any` | VLC audio output modules, tried in order; **if you get no sound, try `audiotrack,opensles,any` or `any`** |
+| `videoOutput` | `vmem` | VLC video output module. `vmem` is the callback output WATERMeDIA's video screens need; Android's own `android_display`/`android_window` expect a Java `Surface` that does not exist here, which leaves a **white screen**. Leave empty to let libvlc decide |
+| `hardwareDecoding` | `none` | VLC hardware decoder list. The default `none` avoids Android MediaCodec, which wants to decode into a `Surface`; without one it can open successfully and then never deliver a picture. On a strong device `any` re-enables it and saves battery |
 | `extraVlcArguments` | empty | Extra libvlc switches, separated by commas or spaces |
 
 Debug system properties: `-Dwatermedia.androidbridge.forceAndroid=true` (force the Android path off-device) and
@@ -121,6 +123,7 @@ useful.
 | `SIGSEGV` in `libc.so` (`strtol`) plus `Could not find any graphics adapters` at startup | **Unrelated to this mod**: the launcher's custom renderer plugin (e.g. `libltw_turbo.so`, reporting an `undefined symbol`) crashes during GL initialisation | Switch the launcher renderer from “Custom” back to a built-in one, or update/remove that renderer plugin |
 | `bilibili_media` fails with `NoClassDefFoundError: me/shedaniel/autoconfig/ConfigData` | That third-party mod is missing its **Cloth Config** dependency | Install Cloth Config or remove that mod |
 | Video but no sound | The device's `opensles` output is unusable | Change `audioOutput` to `audiotrack,opensles,any`, or simply `any` |
+| Sound works but the picture stays a plain white quad (video never moves) | Up to 1.0.4: WATERMeDIA uploaded frames with the desktop-only `GL_UNSIGNED_INT_8_8_8_8_REV` type, OpenGL ES rejects it and the texture never receives data | Fixed in 1.0.5: the equivalent `GL_UNSIGNED_BYTE` type plus fallback paths, a forced `--vout=vmem` and MediaCodec hardware decoding off by default. If it is still white, the log says whether libvlc produced no frame (only `video player #N created`) or the problem is on the renderer side (`video texture upload works` present) |
 | First launch is slow | About 43 MiB of native libraries are being extracted | Expected, first launch only; later launches reuse the cached payload |
 
 ---
@@ -206,7 +209,7 @@ From [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge
 
 | File | Size | SHA-256 |
 |---|---|---|
-| `watermedia_android_bridge-1.0.4+mc1.21.1-neoforge.jar` | 59.25 MiB | `49BAC37E59D857B90CD1C368283CF1BAF1A8AF3E184C8C1CFE1B42E2EFCBF85F` |
+| `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` | 59.17 MiB | `A9A0F466CC2D4973537A17F4F82354FF8FEB627C8A301C9A0C646142AEEF7BCB` |
 
 The source lives in this repository (`src/`, `tools/`), so no separate source archive is published — see
 “Building from source” to package it yourself.
