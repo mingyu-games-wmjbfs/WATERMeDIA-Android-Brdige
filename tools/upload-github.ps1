@@ -222,12 +222,12 @@ if ($ReleaseTag) {
   }
 }
 
-Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-
 if ($Topics.Count -gt 0) {
   # Topics need the "Administration: write" repository permission; with a
   # Contents-only token this call is the one that fails, and everything else is
   # already pushed, so a failure here is reported but not fatal.
+  # This has to run BEFORE the temp directory is removed - Invoke-GitHubApi writes
+  # its request body there.
   try {
     $topicsResult = Invoke-GitHubApi -Method PUT -Path "/repos/$Owner/$Repo/topics" -Body @{ names = @($Topics) }
     Write-Host ("topics: " + ($topicsResult.names -join ', '))
@@ -236,4 +236,5 @@ if ($Topics.Count -gt 0) {
   }
 }
 
+Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host 'done'
