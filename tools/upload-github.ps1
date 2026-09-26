@@ -44,7 +44,7 @@ function Get-UploadFiles {
   # built with += instead of List.AddRange: Windows PowerShell 5.1 does not convert
   # the Object[] that ForEach-Object produces into IEnumerable[string].
   $files = @()
-  foreach ($relative in @('.gitignore', 'LICENSE', 'README.md', 'README.en.md', 'docs/TECHNICAL.md', 'docs/RELEASE-NOTES.md')) {
+  foreach ($relative in @('.gitignore', 'LICENSE', 'README.md', 'README.en.md', 'docs/TECHNICAL.md', 'docs/RELEASE-NOTES.md', 'docs/RELEASE-NOTES.en.md')) {
     $full = Join-Path $root $relative
     if (Test-Path $full) { $files += $full } else { Write-Host "[warn] missing $relative" }
   }
@@ -168,12 +168,17 @@ if ($ReleaseTag) {
   if (-not $ReleaseBody) {
     # Keep this script ASCII-only: Windows PowerShell reads .ps1 files as ANSI when
     # they have no BOM, which corrupts non-ASCII literals.  The release text lives in
-    # docs/RELEASE-NOTES.md instead.
-    $notesFile = Join-Path $root 'docs\RELEASE-NOTES.md'
-    if (Test-Path $notesFile) {
-      $ReleaseBody = Get-Content $notesFile -Raw -Encoding UTF8
+    # docs/RELEASE-NOTES.md (Chinese) and docs/RELEASE-NOTES.en.md (English) instead;
+    # both are published, separated by a rule.
+    $chinese = Join-Path $root 'docs\RELEASE-NOTES.md'
+    $english = Join-Path $root 'docs\RELEASE-NOTES.en.md'
+    $parts = @()
+    if (Test-Path $chinese) { $parts += (Get-Content $chinese -Raw -Encoding UTF8) }
+    if (Test-Path $english) { $parts += (Get-Content $english -Raw -Encoding UTF8) }
+    if ($parts.Count -gt 0) {
+      $ReleaseBody = $parts -join "`n`n---`n`n"
     } else {
-      $ReleaseBody = "See README.md for install instructions, requirements and checksums."
+      $ReleaseBody = 'See README.md for install instructions, requirements and checksums.'
     }
   }
   $release = Invoke-GitHubApi -Method POST -Path "/repos/$Owner/$Repo/releases" -Body @{
