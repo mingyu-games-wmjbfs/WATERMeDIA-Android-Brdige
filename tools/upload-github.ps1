@@ -36,6 +36,10 @@ param(
   [string]$ReleaseBody = '',
   [string]$Version = '',
   [string[]]$Topics = @(),
+  # Repository paths that this upload set no longer contains (files that were moved or
+  # deleted locally).  Git trees are additive, so a moved file would otherwise survive at
+  # its old path forever.  A null "sha" in the tree removes the path.
+  [string[]]$RemovePaths = @(),
   [switch]$DryRun
 )
 
@@ -143,6 +147,18 @@ foreach ($file in $upload) {
   }
   $entries.Add(@{ path = $relative; mode = '100644'; type = 'blob'; sha = $blob.sha })
   Write-Host "  uploaded $relative"
+}
+
+foreach ($removed in $RemovePaths) {
+  $relative = $removed.Replace('\', '/').TrimStart('/')
+  if (-not $relative) { continue }
+  if ($upload | Where-Object { (Get-RelativePath $_) -eq $relative }) {
+    Write-Host "  [skip] $relative is both uploaded and removed - keeping the uploaded copy"
+    continue
+  }
+  # a null sha deletes the path from the new tree
+  $entries.Add(@{ path = $relative; mode = '100644'; type = 'blob'; sha = $null })
+  Write-Host "  removed  $relative"
 }
 
 $treeBody = @{ tree = $entries.ToArray() }
