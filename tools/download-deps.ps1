@@ -54,5 +54,17 @@ if ($latest) {
   Get-File "https://repo1.maven.org/maven2/org/videolan/android/libvlc-all/$latest/libvlc-all-$latest.aar" "$dl\libvlc-all-$latest.aar" | Out-Null
 }
 
+Write-Host "===== Forge 1.20.1 compile dependencies ====="
+# tools/build.ps1 -Target forge1201 needs these three: the universal jar carries the
+# event API, @Mod lives in javafmllanguage and net.minecraftforge.api.distmarker.Dist
+# in mergetool-api.  The rest of that target's classpath comes from the local launcher
+# libraries (LWJGL 3.3.1, eventbus 6.0.5, sponge-mixin 0.12.5, fmlcore).
+$forgeMc = '1.20.1'
+$forgeVersion = '47.4.10'
+$forgeBase = "https://maven.minecraftforge.net/net/minecraftforge"
+Get-File "$forgeBase/forge/$forgeMc-$forgeVersion/forge-$forgeMc-$forgeVersion-universal.jar" "$dl\forge-$forgeMc-$forgeVersion-universal.jar" | Out-Null
+Get-File "$forgeBase/javafmllanguage/$forgeMc-$forgeVersion/javafmllanguage-$forgeMc-$forgeVersion.jar" "$dl\javafmllanguage-$forgeMc-$forgeVersion.jar" | Out-Null
+Get-File "$forgeBase/mergetool/1.1.5/mergetool-1.1.5-api.jar" "$dl\mergetool-1.1.5-api.jar" | Out-Null
+
 Write-Host "===== DONE ====="
 Get-ChildItem $dl | Select-Object Name, Length | Format-Table -AutoSize

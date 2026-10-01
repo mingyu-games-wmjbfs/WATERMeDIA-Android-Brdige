@@ -52,6 +52,9 @@ function Get-UploadFiles {
   }
   $files += @(Get-ChildItem (Join-Path $root 'src\main\java') -Recurse -File |
       ForEach-Object { $_.FullName })
+  # the per-loader entry points, metadata and pack.mcmeta live outside src/main
+  $files += @(Get-ChildItem (Join-Path $root 'src\loader') -Recurse -File |
+      ForEach-Object { $_.FullName })
   $files += @(Get-ChildItem (Join-Path $root 'src\main\resources') -Recurse -File |
       Where-Object { $_.FullName -notmatch 'watermedia_android[\\/](natives|jna)' } |
       ForEach-Object { $_.FullName })
@@ -183,22 +186,61 @@ if ($ReleaseTag) {
       $ReleaseBody = 'See README.md for install instructions, requirements and checksums.'
     }
   }
-  $release = Invoke-GitHubApi -Method POST -Path "/repos/$Owner/$Repo/releases" -Body @{
-    tag_name = $ReleaseTag
-    name = $ReleaseName
-    body = $ReleaseBody
-    draft = $false
-    prerelease = $false
+  # A release for this tag may already exist (a re-release that only replaces/extends the
+  # attachments).  POSTing again would fail with 422, so an existing release is updated
+  # in place: same tag, same URL, fresh body and attachments.
+  $existing = $null
+  try {
+    $existing = Invoke-GitHubApi -Method GET -Path "/repos/$Owner/$Repo/releases/tags/$ReleaseTag"
+  } catch {
+    $existing = $null
+  }
+  if ($existing) {
+    Write-Host "release $ReleaseTag already exists (id $($existing.id)) - updating it"
+    $release = Invoke-GitHubApi -Method PATCH -Path "/repos/$Owner/$Repo/releases/$($existing.id)" -Body @{
+      name = $ReleaseName
+      body = $ReleaseBody
+      draft = $false
+      prerelease = $false
+    }
+  } else {
+    $release = Invoke-GitHubApi -Method POST -Path "/repos/$Owner/$Repo/releases" -Body @{
+      tag_name = $ReleaseTag
+      name = $ReleaseName
+      body = $ReleaseBody
+      draft = $false
+      prerelease = $false
+    }
   }
   Write-Host "release: $($release.html_url)"
-  # only the playable jar is published: the source already lives in the repository,
-  # so a -sources.jar attachment would be redundant.  -Version keeps older builds that
-  # still sit in dist/ from being attached to this release.
+
+  # only the playable jars are published: the source already lives in the repository, so a
+  # -sources.jar attachment would be redundant.  -Version keeps older builds that still sit
+  # in dist/ from being attached to this release, and both the Forge and the NeoForge jar
+  # match it, so one version publishes both loaders.
   $pattern = if ($Version) { "*$Version*.jar" } else { '*.jar' }
   $assets = @(Get-ChildItem (Join-Path $root 'dist') -Filter $pattern -ErrorAction SilentlyContinue |
       Where-Object { $_.Name -notlike '*-sources.jar' })
   if ($assets.Count -eq 0) { Write-Host "[warn] no release asset matched $pattern in dist/" }
+
+  $existingAssets = @()
+  try {
+    $existingAssets = @(Invoke-GitHubApi -Method GET -Path "/repos/$Owner/$Repo/releases/$($release.id)/assets")
+  } catch {
+    Write-Host "[warn] could not list the release assets: $($_.Exception.Message)"
+  }
+
   foreach ($asset in $assets) {
+    $previous = $existingAssets | Where-Object { $_.name -eq $asset.Name } | Select-Object -First 1
+    if ($previous -and $previous.size -eq $asset.Length) {
+      Write-Host ("  asset: {0} already present with the same size ({1:N0} B) - left alone" -f $asset.Name, $asset.Length)
+      continue
+    }
+    if ($previous) {
+      Write-Host ("  asset: {0} differs ({1:N0} B on GitHub vs {2:N0} B locally) - replacing" -f `
+          $asset.Name, $previous.size, $asset.Length)
+      Invoke-GitHubApi -Method DELETE -Path "/repos/$Owner/$Repo/releases/assets/$($previous.id)" | Out-Null
+    }
     $arguments = @(
       '-sS', '--ssl-no-revoke', '-X', 'POST', '-m', '1800',
       '-H', "Authorization: Bearer $Token",

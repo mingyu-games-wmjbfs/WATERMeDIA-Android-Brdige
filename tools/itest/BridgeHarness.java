@@ -147,12 +147,76 @@ public final class BridgeHarness {
                     containsAscii(mixinConfig, "org.watermedia.androidbridge.mixin")
                             && containsAscii(mixinConfig, "RenderAPIMixin")
                             && containsAscii(mixinConfig, "\"required\": false"));
-
-            final byte[] toml = readFromCodeSource(AndroidVlc.class, "META-INF/neoforge.mods.toml");
-            check("mods.toml registers the mixin config",
-                    containsAscii(toml, "[[mixins]]") && containsAscii(toml, "watermedia_android_bridge.mixins.json"));
         } catch (final Throwable t) {
             check("mixin wiring could be inspected (" + t + ')', false);
+        }
+
+        // ---- loader metadata: the same sources ship as a Forge and a NeoForge jar ----
+        // Only the entry point, the pack format and the mixin announcement differ; the
+        // wrong combination silently produces a jar the loader refuses to start, so every
+        // piece is checked against the metadata that is actually packaged.
+        try {
+            final byte[] forgeToml = readFromCodeSource(AndroidVlc.class, "META-INF/mods.toml");
+            final byte[] neoForgeToml = readFromCodeSource(AndroidVlc.class, "META-INF/neoforge.mods.toml");
+            check("exactly one loader metadata file is packaged (mods.toml XOR neoforge.mods.toml)",
+                    (forgeToml == null) != (neoForgeToml == null));
+            final boolean forge = forgeToml != null;
+            System.out.println("  (loader metadata: " + (forge ? "META-INF/mods.toml (Forge)" : "META-INF/neoforge.mods.toml (NeoForge)") + ')');
+
+            final byte[] metadata = forge ? forgeToml : neoForgeToml;
+            check("the metadata declares the mod id watermedia_android_bridge",
+                    containsAscii(metadata, "watermedia_android_bridge"));
+            check("the metadata declares GPL-3.0-or-later",
+                    containsAscii(metadata, "GPL-3.0-or-later"));
+            check("the metadata requires WATERMeDIA >= 2.1.36 (VLC generation)",
+                    containsAscii(metadata, "2.1.36") && containsAscii(metadata, "watermedia"));
+
+            final byte[] packMeta = readFromCodeSource(AndroidVlc.class, "pack.mcmeta");
+            final boolean packFormatOk = forge
+                    ? containsAscii(packMeta, "\"pack_format\": 15")
+                    : containsAscii(packMeta, "\"pack_format\": 34");
+            check("pack.mcmeta uses the pack format of its Minecraft version ("
+                    + (forge ? "1.20.1 = 15" : "1.21.1 = 34") + ')', packFormatOk);
+
+            final byte[] entry = readFromCodeSource(AndroidVlc.class,
+                    "org/watermedia/androidbridge/AndroidBridge.class");
+            check("the entry point class is packaged", entry != null);
+            check("the entry point belongs to this loader",
+                    forge ? (containsAscii(entry, "net/minecraftforge/fml/common/Mod")
+                                    && !containsAscii(entry, "net/neoforged/fml/common/Mod"))
+                            : (containsAscii(entry, "net/neoforged/fml/common/Mod")
+                                    && !containsAscii(entry, "net/minecraftforge/fml/common/Mod")));
+
+            if (forge) {
+                check("Forge metadata targets loader 47+ (Minecraft 1.20.1)",
+                        containsAscii(metadata, "loaderVersion=\"[47,)\""));
+                check("Forge metadata declares the ordering=BEFORE WaterMedia dependency",
+                        containsAscii(metadata, "ordering=\"BEFORE\"") && containsAscii(metadata, "mandatory=true"));
+            } else {
+                check("NeoForge metadata targets loader 3+ (Minecraft 1.21.1)",
+                        containsAscii(metadata, "loaderVersion = \"[3,)\""));
+                check("NeoForge metadata declares the type=required ordering=BEFORE WaterMedia dependency",
+                        containsAscii(metadata, "ordering = \"BEFORE\"") && containsAscii(metadata, "type = \"required\""));
+                check("NeoForge registers the mixin config through [[mixins]]",
+                        containsAscii(metadata, "[[mixins]]")
+                                && containsAscii(metadata, "watermedia_android_bridge.mixins.json"));
+            }
+
+            // The manifest only exists inside a jar; a classes directory has none, so the
+            // mixin announcement is verified on the packaged artifact runs.
+            final byte[] manifest = readFromCodeSource(AndroidVlc.class, "META-INF/MANIFEST.MF");
+            if (manifest == null) {
+                System.out.println("  (classes directory: the jar manifest is only checked on the packaged jar)");
+            } else if (forge) {
+                check("Forge announces the mixin config through the jar manifest MixinConfigs",
+                        containsAscii(manifest, "MixinConfigs")
+                                && containsAscii(manifest, "watermedia_android_bridge.mixins.json"));
+            } else {
+                check("NeoForge needs no manifest entry because [[mixins]] is registered in the toml",
+                        !containsAscii(manifest, "MixinConfigs"));
+            }
+        } catch (final Throwable t) {
+            check("the loader metadata could be inspected (" + t + ')', false);
         }
 
         // ---- video path: the Android GL upload and the frame diagnostics ----------
@@ -275,9 +339,15 @@ public final class BridgeHarness {
                     containsAscii(notice, "GPLv3") && containsAscii(notice, "PolyForm")
                             && containsAscii(notice, "LGPL-2.1"));
 
-            final byte[] tomlLicence = readFromCodeSource(AndroidVlc.class, "META-INF/neoforge.mods.toml");
-            check("mods.toml declares the mod licence as GPL-3.0-or-later",
-                    containsAscii(tomlLicence, "license = \"GPL-3.0-or-later\""));
+            byte[] tomlLicence = readFromCodeSource(AndroidVlc.class, "META-INF/neoforge.mods.toml");
+            boolean spacedSyntax = true;
+            if (tomlLicence == null) {
+                tomlLicence = readFromCodeSource(AndroidVlc.class, "META-INF/mods.toml");
+                spacedSyntax = false;
+            }
+            check("the loader metadata declares the mod licence as GPL-3.0-or-later",
+                    containsAscii(tomlLicence, spacedSyntax ? "license = \"GPL-3.0-or-later\""
+                            : "license=\"GPL-3.0-or-later\""));
         } catch (final Throwable t) {
             check("licence compliance could be inspected (" + t + ')', false);
         }

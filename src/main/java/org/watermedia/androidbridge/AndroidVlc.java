@@ -596,22 +596,52 @@ public final class AndroidVlc {
     }
 
     /**
-     * Resolves the Minecraft instance directory.  {@code FMLLoader} is accessed
-     * reflectively so that this class also loads in plain JVM harnesses.
+     * Resolves the Minecraft instance directory.  The loader is accessed reflectively so
+     * that this class also loads in plain JVM harnesses, and every supported loader is
+     * tried in turn: NeoForge and Forge both ship
+     * {@code FMLLoader.getGamePath()}, while {@code FMLPaths.GAMEDIR.get()} is the older
+     * (and in some Forge versions the only) entry point.
      */
     private static Path resolveGameDir() {
         final String override = System.getProperty(AndroidEnv.PROP_GAME_DIR);
         if (override != null && !override.isEmpty()) {
             return Paths.get(override).toAbsolutePath().normalize();
         }
-        try {
-            final Class<?> loader = Class.forName("net.neoforged.fml.loading.FMLLoader");
-            final Method getGamePath = loader.getMethod("getGamePath");
-            final Object value = getGamePath.invoke(null);
-            if (value instanceof Path path) return path.toAbsolutePath().normalize();
-        } catch (final Throwable t) {
-            BridgeLog.debug("FMLLoader.getGamePath() unavailable ({})", t.toString());
+        // NeoForge first (the loader this bridge grew up on), then Forge
+        for (final String loaderName : new String[] {
+                "net.neoforged.fml.loading.FMLLoader",
+                "net.minecraftforge.fml.loading.FMLLoader"}) {
+            try {
+                final Class<?> loader = Class.forName(loaderName);
+                final Method getGamePath = loader.getMethod("getGamePath");
+                final Object value = getGamePath.invoke(null);
+                if (value instanceof Path path) {
+                    BridgeLog.debug("game directory from {}.getGamePath()", loaderName);
+                    return path.toAbsolutePath().normalize();
+                }
+            } catch (final Throwable t) {
+                BridgeLog.debug("{}.getGamePath() unavailable ({})", loaderName, t.toString());
+            }
         }
+        for (final String pathsName : new String[] {
+                "net.neoforged.fml.loading.FMLPaths",
+                "net.minecraftforge.fml.loading.FMLPaths"}) {
+            try {
+                final Class<?> paths = Class.forName(pathsName);
+                final Object gameDir = paths.getField("GAMEDIR").get(null);
+                final Method get = gameDir.getClass().getMethod("get");
+                final Object value = get.invoke(gameDir);
+                if (value instanceof Path path) {
+                    BridgeLog.debug("game directory from {}.GAMEDIR.get()", pathsName);
+                    return path.toAbsolutePath().normalize();
+                }
+            } catch (final Throwable t) {
+                BridgeLog.debug("{}.GAMEDIR.get() unavailable ({})", pathsName, t.toString());
+            }
+        }
+        BridgeLog.warn("could not ask the loader for the game directory, falling back to the "
+                + "process working directory {} - set -D{}=<path> if that is wrong",
+                Paths.get("").toAbsolutePath(), AndroidEnv.PROP_GAME_DIR);
         return Paths.get("").toAbsolutePath().normalize();
     }
 }

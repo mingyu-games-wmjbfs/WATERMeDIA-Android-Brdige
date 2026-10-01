@@ -10,11 +10,19 @@ A patch mod that makes WATERMeDIA / WATERFrAMES work on Android by bundling VLC 
 
 | Item | Requirement |
 |---|---|
-| Minecraft | 1.21.1 (client) |
-| NeoForge | 21.1.235 or newer (any 21.1.x) |
+| Minecraft | **1.20.1** or **1.21.1** (client) |
+| Loader | **Forge 47.x (1.20.1)** or **NeoForge 21.1.235+ (1.21.1)** |
 | Required dependency | WATERMeDIA **2.1.36 / 2.1.37** |
 | Launchers | Android Java Edition launchers such as PojavLauncher and FCL |
 | Architecture | arm64-v8a / armeabi-v7a / x86_64 (no 32-bit x86) |
+
+**Pick the attachment that matches your setup** (both jars are functionally identical, only the loader
+differs):
+
+| Your setup | Jar to use |
+|---|---|
+| 1.20.1 + Forge 47.x | `watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` |
+| 1.21.1 + NeoForge 21.1.x | `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` |
 
 > Not for WATERMeDIA 3.x (FFmpeg backend, without the VLC discovery hook this mod relies on).
 
@@ -36,6 +44,34 @@ These two lines in `latest.log` mean it worked:
 music recover automatically.
 
 ## Changes in 1.0.5
+
+### Added: Minecraft 1.20.1 / Forge 47.x support
+
+The same patch now ships as two loader builds (`+mc1.20.1-forge` and `+mc1.21.1-neoforge`) — **pick the
+one matching your setup**. The 1.20.1 build is not a rewrite; only the loader layer changes:
+
+* **All functional sources are shared**: bundled VLC, app-internal extraction, the `JNI_OnLoad` preload,
+  the `android.os.Environment` stub, the LWJGL aligned-allocation fallback, the GL ES safe video upload
+  and the video chain logging only talk to WATERMeDIA + LWJGL + VLC, so they are byte-identical across
+  both builds (12 files);
+* **Only the entry point and metadata differ**: Forge uses `@Mod` plus `TickEvent.ClientTickEvent`
+  (`Dist.CLIENT`), ships `META-INF/mods.toml` with `pack_format 15`, and registers its mixin config
+  through the **jar manifest `MixinConfigs`** (Forge's `mods.toml` has no `[[mixins]]`).  NeoForge is
+  unchanged (`neoforge.mods.toml` + `[[mixins]]` + `pack_format 34`);
+* **The WATERMeDIA dependency is unchanged** (`[2.1.36,3.0.0)`): WATERMeDIA 2.1.37 is published for
+  1.16.5 / 1.18.2 / 1.19.2 / 1.20.1 / 1.21.1 / 1.21.5 on fabric / forge / neoforge, contains
+  `ForgeLoader`, `NeoFLoader` and `FabricLoader`, and has **zero `net/minecraft/` references** in its
+  967 classes — so both builds use the very same prerequisite jar;
+* **More robust game directory detection**: previously only NeoForge's `FMLLoader.getGamePath()` was
+  asked; now `net.neoforged`/`net.minecraftforge` `FMLLoader.getGamePath()` and `FMLPaths.GAMEDIR.get()`
+  are tried in turn, with a warning (and
+  `-Dwatermedia.androidbridge.gameDir=<path>`) only when everything fails.
+
+Both jars contain the **same functional code byte for byte**; only the loader entry point and metadata
+differ. The bundled VLC and the payload version (`vlc3.0.23-android3.7.1-r2`) are unchanged, so upgrading
+within this version does not re-extract anything.
+
+### Fixed: white video screen (audio fine, picture frozen on the first frame)
 
 Fixes **"audio plays fine but the video picture is stuck on the first frame (a plain white quad)"**.
 Two independent causes are addressed, and every step of the video chain is now logged, so if it still
@@ -78,13 +114,14 @@ Just the `latest.log` — it names the failing step directly:
 | both lines and `video texture upload works`, screen still white | frames and upload are fine; the problem is on the renderer/screen side |
 | `GL error` / `could not upload a video frame` | the driver refused the upload; the error code and every fallback tried are in the same line |
 
-## Older version (1.0.4)
+## Older versions (1.0.4 / 1.0.3 and earlier)
 
-* Licence compliance: confirmed `GPL-3.0-or-later`, all licence texts are shipped inside the jar under
-  `META-INF/licenses/`, every source file carries an SPDX header, and the repository root has a `LICENSE`;
-* `libjnidispatch.so` is no longer bundled (a third-party binary that would almost never activate, since
-  FCL/PojavLauncher already provide a matching build);
-* functionally identical to 1.0.3.
+* 1.0.4: licence compliance (`GPL-3.0-or-later`, all licence texts inside the jar, SPDX headers, the
+  no-longer-needed JNA binary removed);
+* 1.0.3 and earlier: made VLC actually load on Android — app-internal extraction (Android's linker
+  namespace refuses emulated storage), the `JNI_OnLoad` preload plus the `android.os.Environment` stub
+  (fixes the `s_jvm != NULL` assertion) and the LWJGL aligned-allocation fallback (fixes an
+  `OutOfMemoryError` during startup).
 
 ## Checksums and support
 

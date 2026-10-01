@@ -9,11 +9,18 @@ Android 上让 WATERMeDIA / WATERFrAMES 能用的补丁模组（内置 VLC for A
 
 | 项目 | 要求 |
 |---|---|
-| Minecraft | 1.21.1（客户端） |
-| NeoForge | 21.1.235 及以上（21.1.x） |
+| Minecraft | **1.20.1** 或 **1.21.1**（客户端） |
+| 加载器 | **Forge 47.x（1.20.1）** 或 **NeoForge 21.1.235+（1.21.1）** |
 | 必需前置 | WATERMeDIA **2.1.36 / 2.1.37** |
 | 启动器 | PojavLauncher、FCL 等安卓 Java 版启动器 |
 | 设备 | arm64-v8a / armeabi-v7a / x86_64（不含 32 位 x86） |
+
+**按你的环境挑附件**（两个 jar 功能完全相同，只是 loader 不同）：
+
+| 你的环境 | 用哪个 jar |
+|---|---|
+| 1.20.1 + Forge 47.x | `watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` |
+| 1.21.1 + NeoForge 21.1.x | `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` |
 
 > 不适用于 WATERMeDIA 3.x（FFmpeg 后端，没有本模组依赖的 VLC 发现钩子）。
 
@@ -33,6 +40,31 @@ Android 上让 WATERMeDIA / WATERFrAMES 能用的补丁模组（内置 VLC for A
 **WATERFrAMES 无需任何额外补丁**——VLC 一旦可用，它的屏幕/投影仪/方块音乐就会自动恢复。
 
 ## 本版本变更（1.0.5）
+
+### 新增：Minecraft 1.20.1 / Forge 47.x 支持
+
+同一套补丁现在有两个 loader 版本（`+mc1.20.1-forge` 与 `+mc1.21.1-neoforge`），**按你的环境择一**。
+1.20.1 版不是重写，而是把 loader 相关的那一层换掉：
+
+* **共用全部功能源码**：内置 VLC、内部存储解包、`JNI_OnLoad` 预加载、`android.os.Environment`
+  桩类、LWJGL 对齐分配兜底、GLES 安全的视频上传、视频链路埋点——这些只与 WATERMeDIA + LWJGL +
+  VLC 打交道，与 MC/loader 版本无关，因此 12 个功能源文件两边**完全一致**；
+* **只有入口与元数据不同**：Forge 用 `@Mod` + `TickEvent.ClientTickEvent`（`Dist.CLIENT`），
+  元数据是 `META-INF/mods.toml` + `pack_format 15`，mixin 通过 **jar 清单的 `MixinConfigs`** 注册
+  （Forge 的 `mods.toml` 没有 `[[mixins]]`）；NeoForge 保持原样（`neoforge.mods.toml` +
+  `[[mixins]]` + `pack_format 34`）；
+* **WATERMeDIA 依赖不变**：仍是 `[2.1.36,3.0.0)`。WATERMeDIA 2.1.37 的同一个 jar 同时面向
+  1.16.5 / 1.18.2 / 1.19.2 / 1.20.1 / 1.21.1 / 1.21.5 与 fabric / forge / neoforge 发布，
+  内含 `ForgeLoader`、`NeoFLoader`、`FabricLoader` 三种实现，且 967 个 class 里**零个
+  `net/minecraft/` 引用**——所以两个 loader 版本用的是同一个前置；
+* **游戏目录探测更稳**：以前只问 NeoForge 的 `FMLLoader.getGamePath()`，现在依次尝试
+  `net.neoforged`/`net.minecraftforge` 的 `FMLLoader.getGamePath()` 与 `FMLPaths.GAMEDIR.get()`，
+  都失败才退回工作目录并打印告警（`-Dwatermedia.androidbridge.gameDir=<路径>` 可强制指定）。
+
+两个 jar 的功能代码**逐字节相同**，区别只在 loader 入口与元数据。
+内置 VLC 与 payload 版本（`vlc3.0.23-android3.7.1-r2`）不变，同一版本号内升级**不会重新解包**。
+
+### 修复：视频白屏（音频正常、画面停在第一帧）
 
 修复**「音频正常、视频画面永远停在第一帧（一块纯白）」**。按两条互不相关的原因分别下药，
 并把整条视频链路的关键节点写进日志，这样万一还没好，日志本身就能指明卡在哪一步：
@@ -71,12 +103,12 @@ payload 版本 `vlc3.0.23-android3.7.1-r2` 不变，因此升级不会重新解�
 | 两条都有，还有 `video texture upload works`，屏幕仍白 | 帧和上传都正常，问题在渲染侧（WATERFrAMES/屏幕本身） |
 | 出现 `GL error` / `could not upload a video frame` | 上传被驱动拒绝，错误码和尝试过的回退路径都写在同一条日志里 |
 
-## 历史版本（1.0.4）
+## 历史版本（1.0.4 / 1.0.3 及更早）
 
-* 许可合规：确认 `GPL-3.0-or-later`，随包附上全部许可全文（jar 内 `META-INF/licenses/`），
-  所有源码加 SPDX 头，仓库根新增 `LICENSE`；
-* 不再随包 `libjnidispatch.so`（第三方二进制，在 FCL/PojavLauncher 上因版本不匹配基本不启用）；
-* 功能与 1.0.3 完全一致。
+* 1.0.4：许可合规（`GPL-3.0-or-later`、随包许可全文、SPDX 头、移除不再需要的 JNA 二进制）；
+* 1.0.3 及更早：让 VLC 在安卓上真正加载起来——内部存储解包（绕开链接器命名空间）、
+  `JNI_OnLoad` 预加载 + `android.os.Environment` 桩类（修 `s_jvm != NULL` 断言）、
+  LWJGL 对齐分配兜底（修启动期 `OutOfMemoryError`）。
 
 ## 校验与支持
 

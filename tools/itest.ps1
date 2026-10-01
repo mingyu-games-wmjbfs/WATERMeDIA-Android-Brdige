@@ -33,7 +33,8 @@ if (-not $waterMedia) { throw 'no watermedia jar in vendor/downloads - run tools
 Write-Host "verifying against $waterMedia"
 
 $classpath = @(
-  (Join-Path $root 'build\classes'),
+  (Join-Path $root 'build\classes\forge1201'),
+  (Join-Path $root 'build\classes\neoforge1211'),
   $waterMedia,
   (Join-Path $libs 'net\java\dev\jna\jna\5.14.0\jna-5.14.0.jar'),
   (Join-Path $libs 'net\java\dev\jna\jna-platform\5.14.0\jna-platform-5.14.0.jar'),
@@ -49,10 +50,8 @@ New-Item -ItemType Directory -Force -Path $itest | Out-Null
 & $javac -encoding UTF-8 -proc:none -classpath $classpath -d $itest (Join-Path $root 'tools\itest\BridgeHarness.java')
 if ($LASTEXITCODE -ne 0) { throw 'harness compilation failed' }
 
-$modClasses = Join-Path $root 'build\classes'
-$modJar = (Get-ChildItem (Join-Path $root 'dist') -Filter '*neoforge.jar' |
-  Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-if (-not $modJar) { throw 'no built mod jar in dist/ - run tools/build.ps1 first' }
+$modClasses = Join-Path $root 'build\classes\forge1201'
+if (-not (Test-Path $modClasses)) { throw 'no compiled classes - run tools/build.ps1 -Target all first' }
 $deps = @(
   $waterMedia,
   (Join-Path $libs 'net\java\dev\jna\jna\5.14.0\jna-5.14.0.jar'),
@@ -79,11 +78,29 @@ function Invoke-Harness([string]$label, [string]$modPath, [string[]]$harnessArgs
 }
 
 $exits = @()
-# contract checks against the compiled classes
-$exits += Invoke-Harness 'mode=install (classes)' $modClasses @('install', (Join-Path $runDir 'game-install'))
-# the same checks against the packaged jar: proves the payload really is inside it
-$exits += Invoke-Harness 'mode=install (packaged jar)' $modJar @('install', (Join-Path $runDir 'game-install-jar'))
-# the real discovery chain, using WATERMeDIA's own Windows VLC
+# every build target is verified on its compiled classes and on its packaged jar (the
+# latter proves the payload and the loader metadata really are inside the artifact)
+$targets = @(
+  @{ name = 'forge1201'; pattern = '*mc1.20.1-forge.jar' },
+  @{ name = 'neoforge1211'; pattern = '*mc1.21.1-neoforge.jar' }
+)
+foreach ($target in $targets) {
+  $classes = Join-Path $root "build\classes\$($target.name)"
+  if (-not (Test-Path $classes)) {
+    Write-Host "[skip] $($target.name): no compiled classes (run tools/build.ps1 -Target all)"
+    continue
+  }
+  $exits += Invoke-Harness "mode=install ($($target.name) classes)" $classes @('install', (Join-Path $runDir "game-$($target.name)"))
+  $jar = Get-ChildItem (Join-Path $root 'dist') -Filter $target.pattern |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($jar) {
+    $exits += Invoke-Harness "mode=install ($($target.name) packaged jar)" $jar.FullName @('install', (Join-Path $runDir "game-$($target.name)-jar"))
+  } else {
+    Write-Host "[warn] no packaged jar matches $($target.pattern)"
+  }
+}
+# the real discovery chain, using WATERMeDIA's own Windows VLC (target independent)
+$modClasses = Join-Path $root 'build\classes\forge1201'
 $exits += Invoke-Harness 'mode=discover' $modClasses @('discover', (Join-Path $runDir 'game-discover'), $waterMedia)
 
 Write-Host ''

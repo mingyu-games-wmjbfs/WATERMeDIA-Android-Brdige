@@ -1,7 +1,8 @@
 # WATERMeDIA: Android Bridge
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-3fb950.svg)](#requirements)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1%20%7C%201.21.1-3fb950.svg)](#requirements)
+[![Forge](https://img.shields.io/badge/Forge-47.x-e8942a.svg)](#requirements)
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.235%2B-e8942a.svg)](#requirements)
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#requirements)
 [![Version](https://img.shields.io/badge/version-1.0.5-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
@@ -43,26 +44,37 @@ discovery chain.
 
 | Item | Requirement |
 |---|---|
-| Minecraft | **1.21.1** (client) |
-| Mod loader | **NeoForge 21.1.235 or newer** (any 21.1.x) |
+| Minecraft | **1.20.1** or **1.21.1** (client) |
+| Mod loader | **Forge 47.x** (with MC 1.20.1) or **NeoForge 21.1.235+** (with MC 1.21.1) |
 | Required dependency | **WATERMeDIA 2.1.36 or 2.1.37** (the VLC / videolan4j generation) |
 | Launchers | Android Java Edition launchers: PojavLauncher, FCL (Fold Craft Launcher) and forks |
 | Architecture | `arm64-v8a` (most devices), `armeabi-v7a` (32-bit JVM), `x86_64` (emulators); no `x86` |
 | Server | **Not needed** — client side only; VLC playback only happens on the client |
 
 > ⚠️ **Not for WATERMeDIA 3.x.** Since 3.0.0 WATERMeDIA uses an FFmpeg backend and has neither `videolan4j`
-> nor the discovery hook this mod relies on. The dependency range is pinned to `[2.1.36, 3.0.0)`, so NeoForge
-> will report the unmet dependency instead of loading a broken combination.
+> nor the discovery hook this mod relies on. The dependency range is pinned to `[2.1.36, 3.0.0)`, so the
+> loader will report the unmet dependency instead of loading a broken combination.
+>
+> 💡 **Both jars are functionally identical** and only differ in their loader; the `watermedia`
+> prerequisite is the very same jar, because WATERMeDIA 2.1.37 itself supports 1.16.5 / 1.18.2 / 1.19.2 /
+> 1.20.1 / 1.21.1 on fabric / forge / neoforge.
 
 ---
 
 ## Installation and usage
 
 1. Make sure your `mods/` folder already contains **WATERMeDIA 2.1.36 or 2.1.37** (client);
-2. Download **`watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar`** from
+2. Download the jar that matches your setup from
    [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
-   (if no release is published yet, build it yourself — see “Building from source”) and put it in the same
-   `mods/` folder;
+   (if no release is published yet, build it yourself — see “Building from source”):
+
+   | Your setup | Download |
+   |---|---|
+   | MC **1.20.1** + Forge 47.x | `watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` |
+   | MC **1.21.1** + NeoForge 21.1.x | `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` |
+
+   Put it in the same `mods/` folder (**installing both is pointless, and the wrong one is rejected by the
+   loader with an unmet-dependency message**);
 3. Start the game. On the **first launch** it extracts about 43 MiB per ABI of native libraries into
    **app-internal storage** and prints the exact path to the log; later launches reuse it (a version marker
    prevents re-extraction);
@@ -124,6 +136,7 @@ useful.
 | `bilibili_media` fails with `NoClassDefFoundError: me/shedaniel/autoconfig/ConfigData` | That third-party mod is missing its **Cloth Config** dependency | Install Cloth Config or remove that mod |
 | Video but no sound | The device's `opensles` output is unusable | Change `audioOutput` to `audiotrack,opensles,any`, or simply `any` |
 | Sound works but the picture stays a plain white quad (video never moves) | Up to 1.0.4: WATERMeDIA uploaded frames with the desktop-only `GL_UNSIGNED_INT_8_8_8_8_REV` type, OpenGL ES rejects it and the texture never receives data | Fixed in 1.0.5: the equivalent `GL_UNSIGNED_BYTE` type plus fallback paths, a forced `--vout=vmem` and MediaCodec hardware decoding off by default. If it is still white, the log says whether libvlc produced no frame (only `video player #N created`) or the problem is on the renderer side (`video texture upload works` present) |
+| On 1.20.1 Forge the loader reports a missing dependency / the mod does not load | The wrong jar for that loader was installed | MC 1.20.1 + Forge 47.x needs `+mc1.20.1-forge`, MC 1.21.1 + NeoForge needs `+mc1.21.1-neoforge`; putting both in `mods/` serves no purpose |
 | First launch is slow | About 43 MiB of native libraries are being extracted | Expected, first launch only; later launches reuse the cached payload |
 
 ---
@@ -183,23 +196,29 @@ tools\fetch-license-texts.ps1
 # 2) extract the native libraries from the official APKs into src/main/resources
 tools\pack-payload.ps1
 
-# 3) compile and package with javac + jar (compile-time dependencies come from the
-#    NeoForge 1.21.1 libraries installed on this machine); the build refuses to run
-#    if a source file is missing its SPDX licence header
-tools\build.ps1
+# 3) compile and package with javac + jar
+#    -Target forge1201 (default) = MC 1.20.1 / Forge 47.4.10
+#    -Target neoforge1211       = MC 1.21.1 / NeoForge 21.1.x
+#    -Target all                = both, plus the sources jar
+#    the build refuses to run if a source file is missing its SPDX licence header
+tools\build.ps1 -Target all
 
-# 4) 76 integration checks (including extracting straight from the packaged jar, the
-#    JNI_OnLoad contract, the Mixin injection point and licence compliance)
+# 4) integration checks (every build target, on its classes and on its packaged jar,
+#    plus the real discovery chain)
 tools\itest.ps1
 ```
 
-* `tools/build.ps1` reads its compile-time dependencies (NeoForge / FancyModLoader / JNA / Log4j / Gson) from
-  the local PCL2 library folder; change `$mc` at the top of the script on another machine.
+* `tools/build.ps1` reads its compile-time dependencies (Forge / NeoForge / Mixin / JNA / Log4j) from the
+  local PCL2 library folder; change `$mc` at the top of the script on another machine.  The three Forge
+  47.4.10 jars (`forge-…-universal`, `javafmllanguage`, `mergetool`) are tiny and live in
+  `vendor/downloads/` (fetched by `tools/download-deps.ps1`).
 * `src/main/resources/watermedia_android/natives/**` (about 127 MiB of `.so`) is generated by
-  `tools/pack-payload.ps1` from the official APKs and is **not meant to be committed**.
-* Source layout: `src/main/java` (10 classes, including the `android/os/Environment` stub and
-  `mixin/RenderAPIMixin`) and `src/main/resources` (`META-INF/neoforge.mods.toml`, the mixin config, the
-  service registration and `META-INF/licenses/`).
+  `tools/pack-payload.ps1` from the official APKs and is **not meant to be committed** (both targets share
+  the same payload).
+* Source layout: `src/main/java` (12 loader-independent classes, including the `android/os/Environment`
+  stub, both mixins and `VideoUpload`/`VideoDiagnostics`), `src/loader/forge` and `src/loader/neoforge`
+  (each entry point plus its loader metadata and `pack.mcmeta`), and `src/main/resources` (the mixin
+  config, the service registration, `META-INF/licenses/` and the payload manifest).
 
 ---
 
@@ -209,7 +228,12 @@ From [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge
 
 | File | Size | SHA-256 |
 |---|---|---|
-| `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` | 59.17 MiB | `A9A0F466CC2D4973537A17F4F82354FF8FEB627C8A301C9A0C646142AEEF7BCB` |
+| `watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` | 59.17 MiB | `CD2C63E9361DCFD9C8B9A222A44DC5B50F416E58246D2A2C2D7DD67A04D8080E` |
+| `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` | 59.17 MiB | `F7EC428FE06F496DB456D6A035BAB45B80140E24482A4A308F12E2F704882362` |
+
+Both jars contain the same functional code; they only differ in the loader entry point and metadata
+(Forge: `mods.toml` + `pack_format 15` + `MixinConfigs` in the manifest; NeoForge:
+`neoforge.mods.toml` + `[[mixins]]` + `pack_format 34`).
 
 The source lives in this repository (`src/`, `tools/`), so no separate source archive is published — see
 “Building from source” to package it yourself.

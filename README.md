@@ -1,7 +1,8 @@
 # WATERMeDIA: Android Bridge
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-3fb950.svg)](#适用范围)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1%20%7C%201.21.1-3fb950.svg)](#适用范围)
+[![Forge](https://img.shields.io/badge/Forge-47.x-e8942a.svg)](#适用范围)
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.235%2B-e8942a.svg)](#适用范围)
 [![WATERMeDIA](https://img.shields.io/badge/WATERMeDIA-2.1.36%20~%202.1.37-8b5cf6.svg)](#适用范围)
 [![Version](https://img.shields.io/badge/version-1.0.5-lightgrey.svg)](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases)
@@ -15,7 +16,8 @@
 > module fails to load and the game may even crash. This client-side add-on bundles the official VLC for
 > Android binaries (libvlc 3.0.23, arm64-v8a / armeabi-v7a / x86_64), extracts them into app-internal
 > storage and wires them into WATERMeDIA's own native-discovery hook. No WATERMeDIA file is modified.
-> Requires Minecraft 1.21.1 + NeoForge 21.1.235+ + WATERMeDIA 2.1.36/2.1.37. Licensed GPL-3.0-or-later.
+> Requires Minecraft 1.20.1 + Forge 47.x **or** Minecraft 1.21.1 + NeoForge 21.1.235+, plus WATERMeDIA
+> 2.1.36/2.1.37. Licensed GPL-3.0-or-later.
 
 ---
 
@@ -45,24 +47,33 @@ private final boolean wrapped = Platform.isWindows() && Platform.is64Bit();
 
 | 项目 | 要求 |
 |---|---|
-| Minecraft | **1.21.1**（客户端） |
-| 模组加载器 | **NeoForge 21.1.235 及以上**（21.1.x 全线） |
+| Minecraft | **1.20.1** 或 **1.21.1**（客户端） |
+| 模组加载器 | **Forge 47.x**（配合 MC 1.20.1）或 **NeoForge 21.1.235+**（配合 MC 1.21.1） |
 | 必需前置 | **WATERMeDIA 2.1.36 或 2.1.37**（VLC / videolan4j 世代） |
 | 适用场景 | 安卓 Java 版启动器：PojavLauncher、FCL（Fold Craft Launcher）及其分支 |
 | 设备架构 | `arm64-v8a`（绝大多数设备）、`armeabi-v7a`（32 位 JVM）、`x86_64`（模拟器）；不含 `x86` |
 | 服务端 | **不需要**（纯客户端；VLC 播放只发生在客户端） |
 
 > ⚠️ **不适用于 WATERMeDIA 3.x**。3.0.0 起改用 FFmpeg 后端，既没有 `videolan4j` 也没有本模组依赖的
-> 发现钩子；本模组的依赖版本区间已锁在 `[2.1.36, 3.0.0)`，届时 NeoForge 会直接提示不满足依赖。
+> 发现钩子；本模组的依赖版本区间已锁在 `[2.1.36, 3.0.0)`，届时加载器会直接提示不满足依赖。
+>
+> 💡 **两个 jar 功能完全相同**，只是 loader 不同；`watermedia` 前置也是同一个 jar——WATERMeDIA 2.1.37
+> 本身就同时支持 1.16.5 / 1.18.2 / 1.19.2 / 1.20.1 / 1.21.1 与 fabric / forge / neoforge。
 
 ---
 
 ## 安装与使用
 
 1. 确认 `mods/` 里已有 **WATERMeDIA 2.1.36 或 2.1.37** 的 jar（客户端版本）；
-2. 从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases) 下载
-   **`watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar`**（还没发布 Release 时，可按下文「从源码构建」自行打包），
-   放进同一个 `mods/` 目录；
+2. 从 [Releases](https://github.com/mingyu-games-wmjbfs/WATERMeDIA-Android-Bridge/releases) 下载**对应你环境的那一个** jar
+   （还没发布 Release 时，可按下文「从源码构建」自行打包）：
+
+   | 你的环境 | 下载 |
+   |---|---|
+   | MC **1.20.1** + Forge 47.x | `watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` |
+   | MC **1.21.1** + NeoForge 21.1.x | `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` |
+
+   放进同一个 `mods/` 目录（**两个都放没有意义，放错那个会被加载器拒绝并提示依赖不满足**）；
 3. 启动游戏。**首次启动**会自动把约 43 MiB（每个 ABI）的原生库解包到**应用内部存储**——
    日志里会打印确切路径；之后启动直接复用（有版本标记，不会重复解包）；
 4. 进游戏后用 WATERFrAMES 的屏幕/投影仪等播放任意视频即可。
@@ -121,6 +132,7 @@ WATERMeDIA 在发现失败时还会打印 VLC 自述日志 `logs/videolan-discov
 | `bilibili_media` 加载失败 `NoClassDefFoundError: me/shedaniel/autoconfig/ConfigData` | 该第三方模组缺 **Cloth Config** 前置 | 安装 Cloth Config 或移除该模组 |
 | 有画面没声音 | 设备的 `opensles` 不可用 | 把 `audioOutput` 改为 `audiotrack,opensles,any`，或直接用 `any` |
 | 有声音但画面永远是一块白色（视频不动） | 1.0.4 及更早：WATERMeDIA 用桌面专用的 `GL_UNSIGNED_INT_8_8_8_8_REV` 上传视频帧，OpenGL ES 拒绝该类型，纹理始终没有数据 | 1.0.5 起改为通用的 `GL_UNSIGNED_BYTE`（字节序等价）并加兜底路径，同时强制 `--vout=vmem`、默认关掉 MediaCodec 硬解。若仍白屏，日志会指明是 libvlc 没出帧（只有 `video player #N created`）还是渲染侧问题（有 `video texture upload works`） |
+| 1.20.1 Forge 上加载器提示缺少依赖 / 模组不加载 | 装错了 jar（loader 不匹配） | MC 1.20.1 + Forge 47.x 用 `+mc1.20.1-forge`，MC 1.21.1 + NeoForge 用 `+mc1.21.1-neoforge`；两个都放进 `mods/` 没有意义 |
 | 首次启动很慢 | 正在解包约 43 MiB 原生库 | 正常，仅首次；之后命中版本标记直接复用 |
 
 ---
@@ -173,20 +185,26 @@ tools\fetch-license-texts.ps1
 # 2) 从官方 APK 抽出原生库到 src/main/resources，并生成载荷清单
 tools\pack-payload.ps1
 
-# 3) 用 javac + jar 编译打包（编译期依赖取本机已安装的 NeoForge 1.21.1 库）
+# 3) 用 javac + jar 编译打包
+#    -Target forge1201（默认）= MC 1.20.1 / Forge 47.4.10
+#    -Target neoforge1211     = MC 1.21.1 / NeoForge 21.1.x
+#    -Target all              = 两个都打，并生成源码包
 #    构建前会校验每个源文件的 SPDX 许可头
-tools\build.ps1
+tools\build.ps1 -Target all
 
-# 4) 76 项集成检查（含"直接从打包好的 jar 解包"、JNI_OnLoad 契约、Mixin 注入点与许可合规核对）
+# 4) 集成检查（两个 target 各跑一遍编译产物与打包 jar，外加真实发现链）
 tools\itest.ps1
 ```
 
-* `tools/build.ps1` 默认从本机 PCL2 的库目录读取 NeoForge / FancyModLoader / JNA / Log4j / Gson 等
-  编译期依赖，换机器改脚本顶部的 `$mc` 即可。
+* `tools/build.ps1` 默认从本机 PCL2 的库目录读取 Forge / NeoForge / Mixin / JNA / Log4j 等编译期依赖，
+  换机器改脚本顶部的 `$mc` 即可；Forge 47.4.10 的三个 jar（`forge-…-universal`、`javafmllanguage`、
+  `mergetool`）体积很小，放在 `vendor/downloads/`（`tools/download-deps.ps1` 会取）。
 * `src/main/resources/watermedia_android/natives/**`（约 127 MiB 的 `.so`）由 `tools/pack-payload.ps1`
-  从官方 APK 生成，**不需要提交进版本库**。
-* 源码布局：`src/main/java`（10 个类，含 `android/os/Environment` 桩与 `mixin/RenderAPIMixin`）
-  + `src/main/resources`（`META-INF/neoforge.mods.toml`、mixin 配置、服务声明、`META-INF/licenses/`）。
+  从官方 APK 生成，**不需要提交进版本库**（两个 target 共用同一份载荷）。
+* 源码布局：`src/main/java`（12 个与 loader 无关的类，含 `android/os/Environment` 桩、两个 mixin、
+  `VideoUpload`/`VideoDiagnostics`）
+  + `src/loader/forge` 与 `src/loader/neoforge`（各自的入口类与 loader 元数据/`pack.mcmeta`）
+  + `src/main/resources`（mixin 配置、服务声明、`META-INF/licenses/`、载荷清单）。
 
 ---
 
@@ -196,7 +214,11 @@ tools\itest.ps1
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` | 59.17 MiB | `A9A0F466CC2D4973537A17F4F82354FF8FEB627C8A301C9A0C646142AEEF7BCB` |
+| `watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` | 59.17 MiB | `CD2C63E9361DCFD9C8B9A222A44DC5B50F416E58246D2A2C2D7DD67A04D8080E` |
+| `watermedia_android_bridge-1.0.5+mc1.21.1-neoforge.jar` | 59.17 MiB | `F7EC428FE06F496DB456D6A035BAB45B80140E24482A4A308F12E2F704882362` |
+
+两个 jar 的功能代码完全相同，区别只在 loader 入口与元数据（Forge 用 `mods.toml` + `pack_format 15` +
+清单里的 `MixinConfigs`；NeoForge 用 `neoforge.mods.toml` + `[[mixins]]` + `pack_format 34`）。
 
 源码就在本仓库中（`src/`、`tools/`），不再另外附带源码包；按「从源码构建」一节即可自行打包。
 

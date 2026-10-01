@@ -529,3 +529,72 @@ harness 因此专门核对这个字符串。
 「绝不抛」，避免埋点本身把 12.1 的信号量弄坏。harness 复核了：混入类随包、注入描述符正确、
 mixin 配置列出两个混入、`VideoUpload.class` 里确实是 `GL_UNSIGNED_BYTE` + 两步回退、
 以及**在没有 GL 上下文时调用 `VideoUpload.upload` 不抛异常**（正是信号量保护契约）。
+
+## 13. 多 loader 移植：1.20.1 / Forge 47.x（1.0.5）
+
+### 13.1 为什么这不是重写
+
+补丁的全部功能面只与 **WATERMeDIA + LWJGL + libVLC + JNA** 打交道，不碰 Minecraft 类：
+
+| 功能 | 依赖的东西 | 与 MC/loader 版本有关吗 |
+|---|---|---|
+| 解包内置 VLC、位置探测、`JNI_OnLoad` 预加载 | `libvlc.so`、`System.load`、`android.os.Environment` 桩 | 无关 |
+| 接通发现链（`custom_vlc_path.txt` + `IProvider`） | `org.watermedia.videolan4j.discovery` | 无关（WATERMeDIA 自己的 API） |
+| LWJGL 对齐分配兜底、GLES 安全上传、视频埋点 | `MemoryUtil` / `GL11` / `VideoPlayer` | 无关（LWJGL 3.3.x 两版都有这些符号） |
+| 注册 VLC 工厂（`--aout` / `--vout` / `--avcodec-hw`） | `PlayerAPI.registerFactory` | 无关 |
+
+因此 **12 个功能源文件在 Forge 与 NeoForge 两个构建里逐字节相同**（`src/main/java`），
+差异被压缩到两处：入口类与 loader 元数据。
+
+### 13.2 上游证据：WATERMeDIA 2.1.37 是同一份 jar
+
+* Modrinth 上 `watermedia-2.1.37.jar` 声明支持 `1.16.5, 1.18.2, 1.19.2, 1.20.1, 1.21.1, 1.21.5`
+  × `fabric, forge, neoforge`，文件大小 **37,046,674 B**，与本仓库 `vendor/downloads/watermedia-2.1.37.jar`
+  **完全一致**；
+* 该 jar 内 967 个 class 中 `net/minecraft/...` 引用数 = **0**（用 Latin-1 扫常量池验证）；
+* jar 内同时含 `META-INF/mods.toml`（Forge，`loaderVersion="[36,)"`）与
+  `META-INF/neoforge.mods.toml`（NeoForge，`[3,)`），并含 `ForgeLoader` / `NeoFLoader` / `FabricLoader`
+  与对 `net/minecraftforge/fml`、`net/neoforged/fml`、`net/fabricmc/api` 的引用——即运行时按 loader 自选实现。
+
+结论：依赖区间 `[2.1.36,3.0.0)` 在两个目标上指的都是同一个前置 jar，不需要 1.20.1 专用的 WATERMeDIA。
+
+### 13.3 每个 loader 到底差在哪
+
+| 维度 | 1.20.1 / Forge 47.x | 1.21.1 / NeoForge 21.1.x |
+|---|---|---|
+| 入口类 | `src/loader/forge/.../AndroidBridge.java` | `src/loader/neoforge/.../AndroidBridge.java` |
+| 注解 | `@Mod(MOD_ID)`（**Forge 的 `@Mod` 没有 `dist` 成员**）+ `@Mod.EventBusSubscriber(value = Dist.CLIENT, bus = FORGE)` + `TickEvent.ClientTickEvent`（判 `Phase.END`） | `@Mod(value = MOD_ID, dist = Dist.CLIENT)` + `NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, …)` |
+| 元数据文件 | `META-INF/mods.toml` | `META-INF/neoforge.mods.toml` |
+| loader 版本 | `loaderVersion="[47,)"` | `loaderVersion = "[3,)"` |
+| 依赖语法 | `mandatory=true` + `side="CLIENT"` | `type = "required"` + `side = "CLIENT"` |
+| mixin 注册 | **jar 清单 `MixinConfigs: watermedia_android_bridge.mixins.json`**（Forge 的 `mods.toml` 没有 `[[mixins]]`） | `[[mixins]] config = "…"` |
+| `pack.mcmeta` | `pack_format 15` | `pack_format 34` |
+| 编译依赖 | `forge-1.20.1-47.4.10-universal` + `javafmllanguage-1.20.1-47.4.10`（`net.minecraftforge.fml.common.Mod` 在这里）+ `mergetool-1.1.5-api`（`net.minecraftforge.api.distmarker.Dist` 在这里）+ `fmlcore` + `eventbus-6.0.5` + `sponge-mixin-0.12.5` + LWJGL 3.3.1 | `neoforge-21.1.235-universal/client` + `loader-4.0.44` + `bus-8.0.5` + `mergetool-2.0.0-api` + `sponge-mixin-0.15.2` + LWJGL 3.3.3 |
+
+两个坑值得记下来：`@Mod` 注解**不在** Forge 的 universal jar 里（在 `javafmllanguage`），
+`Dist` 也不在（在 `mergetool-api`）——直接把 `universal` 丢进 classpath 会得到 "找不到符号"。
+
+### 13.4 构建与校验
+
+`tools/build.ps1 -Target forge1201|neoforge1211|all`：同一批 `src/main/java`，
+加上目标对应的 `src/loader/<loader>/java` 与 `src/loader/<loader>/resources`（含各自的 `pack.mcmeta`
+与元数据），classpath 与清单属性按目标注入，产物为
+`watermedia_android_bridge-1.0.5+mc1.20.1-forge.jar` / `…+mc1.21.1-neoforge.jar`（载荷共用一份，
+payload 版本仍为 `vlc3.0.23-android3.7.1-r2`，因此从 1.0.5 升级不重新解包）。
+
+`tools/itest.ps1` 现在对**每个 target** 分别跑"编译产物"和"打包 jar"两轮：
+`checks = 60 / 61（forge）/ 61 / 62（neoforge）/ 8（真实发现链），failures = 0`。新增的结构性核对包括：
+`mods.toml` 与 `neoforge.mods.toml` 只出现一个、`pack_format` 与 MC 版本匹配、入口类引用的 loader
+注解与目标一致（Forge jar 里不能出现 `net/neoforged/fml/common/Mod`，反之亦然）、
+Forge 的 `MixinConfigs` 清单项、NeoForge 的 `[[mixins]]`，以及依赖语法（`mandatory=true` ↔ `type="required"`）。
+
+离线无法验证的部分只有一件：真正的 Forge 启动（需要一台装了 Forge 47.4.10 的实例）。
+因此这次移植的真机复测重点是"1.20.1 上能否加载并把 VLC 接上"，判定方式仍是 §12.4 的三行日志。
+
+### 13.5 游戏目录探测（两个 loader 统一）
+
+`AndroidVlc.resolveGameDir()` 现在按顺序尝试：系统属性覆盖 →
+`net.neoforged.fml.loading.FMLLoader.getGamePath()` → `net.minecraftforge.fml.loading.FMLLoader.getGamePath()`
+→ `net.neoforged.fml.loading.FMLPaths.GAMEDIR.get()` → `net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get()`
+→ 工作目录（并打印告警，提示用 `-Dwatermedia.androidbridge.gameDir=<路径>` 指定）。
+两边都是反射调用，因此这个类在纯 JVM harness 里也能加载。
