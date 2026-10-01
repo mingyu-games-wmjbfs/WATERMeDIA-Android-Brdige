@@ -133,6 +133,7 @@ WATERMeDIA 在发现失败时还会打印 VLC 自述日志 `logs/videolan-discov
 | 有画面没声音 | 设备的 `opensles` 不可用 | 把 `audioOutput` 改为 `audiotrack,opensles,any`，或直接用 `any` |
 | 有声音但画面永远是一块白色（视频不动） | 1.0.4 及更早：WATERMeDIA 用桌面专用的 `GL_UNSIGNED_INT_8_8_8_8_REV` 上传视频帧，OpenGL ES 拒绝该类型，纹理始终没有数据 | 1.0.5 起改为通用的 `GL_UNSIGNED_BYTE`（字节序等价）并加兜底路径，同时强制 `--vout=vmem`、默认关掉 MediaCodec 硬解。若仍白屏，日志会指明是 libvlc 没出帧（只有 `video player #N created`）还是渲染侧问题（有 `video texture upload works`） |
 | 1.20.1 Forge 上加载器提示缺少依赖 / 模组不加载 | 装错了 jar（loader 不匹配） | MC 1.20.1 + Forge 47.x 用 `+mc1.20.1-forge`，MC 1.21.1 + NeoForge 用 `+mc1.21.1-neoforge`；两个都放进 `mods/` 没有意义 |
+| 启动即崩：`Error while resolving modules` + `ResolutionException: Modules rinku and mcef export package org.cef.misc to module watermedia_android_bridge` | **与本模组无关**：MCEF 与 Rinku 两个 jar 都是带 `module-info` 的显式 JPMS 模块且都导出 `org.cef.misc`，Java 模块解析直接失败。报错里第三个模块名（这里恰好是本模组）只是「读取方」，不是元凶 | `mods/` 里只保留一份 Rinku（MCEF 自带内嵌的 `de.keksuccino.rinku-…-mod.jar`，删掉独立的那份），或移除 MCEF。验证：临时移走本模组的 jar，报错只会换成别的模块名，游戏依旧起不来 |
 | 首次启动很慢 | 正在解包约 43 MiB 原生库 | 正常，仅首次；之后命中版本标记直接复用 |
 
 ---

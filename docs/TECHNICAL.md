@@ -598,3 +598,49 @@ Forge 的 `MixinConfigs` 清单项、NeoForge 的 `[[mixins]]`，以及依赖语
 → `net.neoforged.fml.loading.FMLPaths.GAMEDIR.get()` → `net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get()`
 → 工作目录（并打印告警，提示用 `-Dwatermedia.androidbridge.gameDir=<路径>` 指定）。
 两边都是反射调用，因此这个类在纯 JVM harness 里也能加载。
+
+## 14. 真机复测记录：视频修复生效 + 一个会「点名」本模组的第三方 JPMS 冲突
+
+### 14.1 1.0.5 的视频链路在真机上成立
+
+FCL / Android 16 / aarch64 / NeoForge 21.1.248 / WATERMeDIA 2.1.37，装 `+mc1.21.1-neoforge`：
+
+```
+18:17:42  [WATERMeDIA: Android Bridge/] WATERMeDIA: Android Bridge / 1.0.5 - Linux/aarch64
+18:17:42  [WATERMeDIA: Android Bridge/] using /data/user/0/com.tungsten.fcl/files/watermedia_android_bridge/arm64-v8a
+18:17:42  [mixin/] Mixing RenderAPIMixin from watermedia_android_bridge.mixins.json into org.watermedia.api.render.RenderAPI
+18:17:42  [mixin/] …RenderAPIMixin…->@Inject::bridge$uploadBuffer(Ljava/nio/ByteBuffer;IIIIZ…)V does use it's CallbackInfo
+18:17:42  [VideoLan4J/NativeDiscovery] Successfully loaded VLC 3.0.23 Vetinari in '…/arm64-v8a'
+18:18:21  [WATERMeDIA: Android Bridge/] video player #1 created; waiting for the first decoded frame
+18:18:21  [WATERMeDIA: Android Bridge/] first video frame from VLC: 1920x1090, 1 plane(s), chroma RGBA
+18:18:21  [WATERMeDIA: Android Bridge/] video texture upload works: texture 59 <- 1920x1090
+          (8371200 bytes, fresh storage, pixel type GL_UNSIGNED_BYTE …)
+18:18:51  [WATERMeDIA: Android Bridge/] video: 632 frame(s), 632 texture upload(s), 0 GL error(s), 0 upload failure(s)
+18:19:21  [WATERMeDIA: Android Bridge/] video: 1642 frame(s), 1641 texture upload(s), 0 GL error(s), 0 upload failure(s)
+```
+
+一分钟内 1642 帧、1641 次上传、**0 个 GL 错误**：`GL_UNSIGNED_BYTE` 替换 + vmem/MediaCodec 参数确实修掉了白屏。
+（帧数比上传数多 1 是首帧回调早于 `buffers` 赋值时 WATERMeDIA 自己跳过的，属预期。）
+
+### 14.2 崩溃「点名」本模组，但根因在第三方模组
+
+另一次启动在模组构造之前就死了：
+
+```
+[main/ERROR]: Error while resolving modules.
+java.lang.module.ResolutionException: Modules rinku and mcef export package org.cef.misc to module watermedia_android_bridge
+```
+
+读法是关键：**消息里第三个模块是「读取方」，不是元凶**。JDK 的
+`jdk.internal.module.Resolver#checkExportSuppliers`（用 `javap -c -p java.lang.module.Resolver` 核对过字节码：
+先 `ModuleDescriptor.isAutomatic()` 跳过自动模块作为提供方，再遍历 `exports()` / `isQualified()` / `targets()`，
+最后抛 `Modules %s and %s export package %s to module %s`）要求「同一个包只能有一个提供方」。
+`rinku` 与 `mcef` 两个 jar 都带 `module-info`（显式模块）且都导出 `org.cef.misc`；本模组是无 `module-info`
+的**自动模块**（自动读取全部模块），于是成为解析器遍历到的第一个「同时读这两个模块」的受害者，被写进报错。
+
+与 14.1 的对照就是证据：同一次会话（Rinku 尚未进入 mod 集合）能正常启动，说明冲突来自后来加入的
+Rinku/MCEF 组合；把本模组的 jar 移走只会让报错换一个模块名，游戏仍然起不来。
+
+**处理**（都在用户侧）：`mods/` 里只保留一份 Rinku —— MCEF 自带内嵌的
+`de.keksuccino.rinku-…-mod.jar`（父 jar `rinku_neoforge_…jar`），删掉重复的那份即可；或者移除 MCEF。
+真机验证方法：临时移走本模组的 jar，看报错里的模块名是否换成了别的模组。
